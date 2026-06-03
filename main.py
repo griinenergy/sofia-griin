@@ -85,6 +85,40 @@ Solo devuelve el mensaje, sin explicaciones adicionales."""
     return response.content[0].text
 
 
+# ─── Helper: Respuesta inteligente al chat ───────────────────────────────────
+def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
+    """Usa Claude para responder cualquier mensaje de WhatsApp como SofIA."""
+
+    system_prompt = """Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga experta en energía que todos quisieran tener.
+
+Tu personalidad:
+- Hablas como colombiana real: usas expresiones como "¡Claro que sí!", "¡Uy, qué buena pregunta!", "¡Vamos con todo!", "¡Con mucho gusto!"
+- Explicas los temas técnicos de energía de forma sencilla, con ejemplos de la vida cotidiana
+- Eres positiva y motivadora, nunca regañas ni eres fría
+- Usas 1-2 emojis por mensaje, no más — natural, no forzado
+
+Tu conocimiento:
+- Eres experta en consumo energético empresarial en Colombia
+- Sabes sobre facturas de energía, kWh, tarifas, costo unitario (CU), operadores de red
+- Conoces estrategias de ahorro energético para empresas
+- Sabes sobre energías renovables, paneles solares, eficiencia
+- Griin Energy es tu empresa: ayuda a empresas colombianas a entender y optimizar su consumo eléctrico
+
+Reglas del formato:
+- Respuestas cortas y directas: máximo 5-6 líneas
+- Usa *negritas* de WhatsApp solo para términos clave
+- NUNCA mandes a nadie a un correo ni a otro canal — todo se resuelve aquí en WhatsApp
+- Si no sabes algo específico del cliente (su factura, su consumo), dile que pronto recibirá su resumen mensual de Griin"""
+
+    response = claude.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        system=system_prompt,
+        messages=[{"role": "user", "content": mensaje}]
+    )
+    return response.content[0].text
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -119,25 +153,8 @@ async def webhook_whatsapp(
     # if not validator.validate(url, form_data, signature):
     #     raise HTTPException(status_code=403, detail="Firma inválida")
 
-    mensaje_lower = Body.lower().strip()
-
-    # Respuesta básica a mensajes entrantes
-    if any(word in mensaje_lower for word in ["hola", "hello", "hi", "buenas", "buenos", "quiubo", "info", "ayuda", "help"]):
-        respuesta = (
-            "¡Hola! 👋 Soy *SofIA*, de Griin Energy.\n\n"
-            "Estoy aquí para ayudarte a entender el consumo eléctrico de tu empresa cada mes. "
-            "Si tienes alguna pregunta sobre tu factura o quieres saber cómo ahorrar, cuéntame — estoy al pie. 💚"
-        )
-    elif any(word in mensaje_lower for word in ["gracias", "thank", "genial", "excelente", "perfecto"]):
-        respuesta = (
-            "¡Con mucho gusto! 😊 Para eso estamos.\n\n"
-            "Cualquier cosa que necesites, aquí me encuentras. 💚"
-        )
-    else:
-        respuesta = (
-            "¡Hola! Soy *SofIA* de Griin Energy. 💚\n\n"
-            "Cuéntame en qué te puedo ayudar con el consumo eléctrico de tu empresa."
-        )
+    # Generar respuesta inteligente con Claude
+    respuesta = generar_respuesta_chat(Body, From)
 
     # Responder con TwiML — Twilio se encarga de enviar la respuesta
     twiml = MessagingResponse()
