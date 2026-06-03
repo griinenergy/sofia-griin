@@ -183,7 +183,11 @@ async def webhook_whatsapp(
     #     raise HTTPException(status_code=403, detail="Firma inválida")
 
     # Generar respuesta inteligente con Claude
-    respuesta = generar_respuesta_chat(Body, From)
+    try:
+        respuesta = generar_respuesta_chat(Body, From)
+    except Exception as e:
+        logger.error(f"Error generando respuesta con Claude: {e}")
+        respuesta = "¡Hola! Soy SofIA de Griin Energy 💚. En este momento tengo un problema técnico — inténtalo de nuevo en unos minutos."
 
     # Responder con TwiML — Twilio se encarga de enviar la respuesta
     twiml = MessagingResponse()
