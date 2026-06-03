@@ -1,0 +1,33 @@
+{
+  "_nota": "Reemplazar con los datos reales de los 17 clientes de Griin. Este es un ejemplo de la estructura.",
+  "mes": "Mayo 2026",
+  "clientes": [
+    {
+      "nombre": "Empresa ABC S.A.S",
+      "telefono": "+573001234567",
+      "kwh_mes": 45200,
+      "kwh_mes_anterior": 48100,
+      "costo_mes": 28500000,
+      "mes": "Mayo 2026",
+      "tarifa_kwh": 630.97
+    },
+    {
+      "nombre": "Industrias XYZ Ltda",
+      "telefono": "+573109876543",
+      "kwh_mes": 128500,
+      "kwh_mes_anterior": 121300,
+      "costo_mes": 81100000,
+      "mes": "Mayo 2026",
+      "tarifa_kwh": 630.97
+    },
+    {
+      "nombre": "Centro Comercial Norte",
+      "telefono": "+573201112233",
+      "kwh_mes": 89700,
+      "kwh_mes_anterior": 92400,
+      "costo_mes": 56600000,
+      "mes": "Mayo 2026",
+      "tarifa_kwh": 630.97
+    }
+  ]
+}
