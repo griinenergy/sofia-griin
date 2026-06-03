@@ -85,17 +85,20 @@ Solo devuelve el mensaje, sin explicaciones adicionales."""
     return response.content[0].text
 
 
-# ─── Helper: Respuesta inteligente al chat ───────────────────────────────────
-def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
-    """Usa Claude para responder cualquier mensaje de WhatsApp como SofIA."""
+# ─── Memoria de conversaciones por número de teléfono ────────────────────────
+# Diccionario en memoria: { "+573001234567": [ {role, content}, ... ] }
+# Se reinicia si el servidor se reinicia — suficiente para el MVP
+conversaciones: dict[str, list] = {}
+MAX_MENSAJES_HISTORIAL = 20  # Últimos 20 mensajes (10 intercambios)
 
-    system_prompt = """Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga experta en energía que todos quisieran tener.
+SYSTEM_PROMPT_SOFIA = """Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga experta en energía que todos quisieran tener.
 
 Tu personalidad:
 - Hablas como colombiana real: usas expresiones como "¡Claro que sí!", "¡Uy, qué buena pregunta!", "¡Vamos con todo!", "¡Con mucho gusto!"
 - Explicas los temas técnicos de energía de forma sencilla, con ejemplos de la vida cotidiana
 - Eres positiva y motivadora, nunca regañas ni eres fría
 - Usas 1-2 emojis por mensaje, no más — natural, no forzado
+- Recuerdas lo que el usuario te ha contado en la conversación y lo usas naturalmente
 
 Tu conocimiento:
 - Eres experta en consumo energético empresarial en Colombia
@@ -110,13 +113,39 @@ Reglas del formato:
 - NUNCA mandes a nadie a un correo ni a otro canal — todo se resuelve aquí en WhatsApp
 - Si no sabes algo específico del cliente (su factura, su consumo), dile que pronto recibirá su resumen mensual de Griin"""
 
+
+# ─── Helper: Respuesta inteligente al chat (con memoria) ─────────────────────
+def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
+    """Usa Claude para responder cualquier mensaje de WhatsApp como SofIA.
+    Guarda y usa el historial de la conversación por número de teléfono."""
+
+    # Obtener o crear historial para este número
+    if telefono not in conversaciones:
+        conversaciones[telefono] = []
+
+    historial = conversaciones[telefono]
+
+    # Agregar el nuevo mensaje del usuario al historial
+    historial.append({"role": "user", "content": mensaje})
+
+    # Llamar a Claude con todo el historial
     response = claude.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
-        system=system_prompt,
-        messages=[{"role": "user", "content": mensaje}]
+        system=SYSTEM_PROMPT_SOFIA,
+        messages=historial
     )
-    return response.content[0].text
+
+    respuesta = response.content[0].text
+
+    # Guardar la respuesta de SofIA en el historial
+    historial.append({"role": "assistant", "content": respuesta})
+
+    # Mantener solo los últimos N mensajes para no crecer infinito
+    if len(historial) > MAX_MENSAJES_HISTORIAL:
+        conversaciones[telefono] = historial[-MAX_MENSAJES_HISTORIAL:]
+
+    return respuesta
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
