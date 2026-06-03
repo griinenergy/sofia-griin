@@ -59,18 +59,21 @@ def generar_resumen_energia(cliente: ClienteEnergia) -> str:
     pct = (variacion / cliente.kwh_mes_anterior * 100) if cliente.kwh_mes_anterior > 0 else 0
     tendencia = "subió" if variacion > 0 else "bajó"
 
-    prompt = f"""Eres SofIA, la asistente de eficiencia energética de Griin Energy.
+    prompt = f"""Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga que todos quisieran tener para entender temas de energía. Hablas como una colombiana real: usas expresiones como "¡Qué buenas noticias!", "¡Eso es un logro!", "¡Vamos con todo!", "¡Uy, hay oportunidad aquí!". Explicas las cosas de forma sencilla, como si le hablaras a alguien que no sabe nada de energía. Nunca eres fría ni corporativa — siempre cercana y positiva.
 
-Genera un mensaje de WhatsApp breve, amigable y profesional en español para el cliente {cliente.nombre}.
+Genera un mensaje de WhatsApp para el cliente {cliente.nombre}.
 El mensaje debe:
-- Ser máximo 5 líneas
-- Usar emojis con moderación (1-2 máximo)
+- Ser máximo 6 líneas
+- Usar emojis con moderación (2-3 máximo), siempre alegres y apropiados
+- Saludar con calidez colombiana
 - Incluir el consumo del mes: {cliente.kwh_mes:,.0f} kWh
-- Mencionar que {tendencia} un {abs(pct):.1f}% vs mes anterior ({cliente.kwh_mes_anterior:,.0f} kWh)
+- Mencionar que {tendencia} un {abs(pct):.1f}% vs el mes anterior ({cliente.kwh_mes_anterior:,.0f} kWh)
+- Si bajó: celebrarlo como un logro personal del cliente
+- Si subió: mencionarlo con tono positivo y motivador, sin regañar
 - Incluir el costo: ${cliente.costo_mes:,.0f} COP
-- Terminar con una nota motivadora sobre eficiencia energética
-- NO uses asteriscos para negritas (WhatsApp usa *texto* para negrita, úsalo con moderación)
-- Firma como "SofIA · Griin Energy"
+- Terminar con una frase motivadora y cercana sobre el poder del ahorro energético
+- Usar *negritas* de WhatsApp solo para los números importantes
+- Firmar como "SofIA 💚 · Griin Energy"
 
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
@@ -120,16 +123,27 @@ async def webhook_whatsapp(
     mensaje_lower = Body.lower().strip()
 
     # Respuesta básica a mensajes entrantes
-    if any(word in mensaje_lower for word in ["hola", "hello", "hi", "info", "ayuda", "help"]):
+    if any(word in mensaje_lower for word in ["hola", "hello", "hi", "buenas", "buenos", "quiubo", "info", "ayuda", "help"]):
         respuesta = (
-            "¡Hola! 👋 Soy *SofIA*, tu asistente de eficiencia energética de Griin Energy.\n\n"
-            "Estoy aquí para enviarte el resumen mensual de tu consumo eléctrico.\n\n"
-            "Si tienes preguntas sobre tu factura, escríbenos a info@griin.com.co 📧"
+            "¡Hola, hola! 👋 ¡Qué bueno que escribiste!\n\n"
+            "Soy *SofIA*, tu amiga de energía de *Griin Energy* 💚\n\n"
+            "Estoy aquí para contarte cómo va el consumo eléctrico de tu empresa cada mes — "
+            "de forma sencilla, sin enredos y con todo el cariño del mundo.\n\n"
+            "Si tienes preguntas sobre tu factura o quieres saber cómo ahorrar, "
+            "escríbenos a info@griin.com.co 📧 ¡Con gusto te ayudamos!"
+        )
+    elif any(word in mensaje_lower for word in ["gracias", "thank", "genial", "excelente", "perfecto"]):
+        respuesta = (
+            "¡Ay, qué alegría leer eso! 😄💚\n\n"
+            "Para eso estamos, para ayudarte a entender tu energía y ahorrar. "
+            "Cualquier cosa que necesites, aquí estoy. ¡Hasta pronto!"
         )
     else:
         respuesta = (
-            "Gracias por escribir. 😊 Nuestro equipo en Griin Energy está aquí para ayudarte.\n"
-            "Para soporte, contáctanos en info@griin.com.co"
+            "¡Hola! 😊 Soy *SofIA* de Griin Energy.\n\n"
+            "Recibo mensajes automáticos del consumo energético de tu empresa, "
+            "pero si tienes una pregunta o necesitas algo, "
+            "escríbele a nuestro equipo a info@griin.com.co — ¡ellos te atienden con todo el gusto! 💚"
         )
 
     # Enviar respuesta
