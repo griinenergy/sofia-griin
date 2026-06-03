@@ -158,7 +158,7 @@ def analizar_factura_pdf(media_url: str, telefono: str) -> str:
     account_sid = os.environ["TWILIO_ACCOUNT_SID"]
     auth_token  = os.environ["TWILIO_AUTH_TOKEN"]
 
-    resp = httpx.get(media_url, auth=(account_sid, auth_token), timeout=30)
+    resp = httpx.get(media_url, auth=(account_sid, auth_token), timeout=30, follow_redirects=True)
     if resp.status_code != 200:
         raise ValueError(f"No pude descargar la factura: HTTP {resp.status_code}")
 
