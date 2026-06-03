@@ -7,6 +7,8 @@ Autor: Malik (Claude) para Farid Hadad / Griin Energy
 
 import os
 import json
+import base64
+import httpx
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import PlainTextResponse, Response
 from twilio.rest import Client as TwilioClient
@@ -148,6 +150,77 @@ def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
     return respuesta
 
 
+# ─── Helper: Leer factura PDF y generar análisis ─────────────────────────────
+def analizar_factura_pdf(media_url: str, telefono: str) -> str:
+    """Descarga el PDF de la factura desde Twilio y pide a Claude que lo analice."""
+
+    # Descargar el PDF usando las credenciales de Twilio (requiere auth básica)
+    account_sid = os.environ["TWILIO_ACCOUNT_SID"]
+    auth_token  = os.environ["TWILIO_AUTH_TOKEN"]
+
+    resp = httpx.get(media_url, auth=(account_sid, auth_token), timeout=30)
+    if resp.status_code != 200:
+        raise ValueError(f"No pude descargar la factura: HTTP {resp.status_code}")
+
+    pdf_b64 = base64.standard_b64encode(resp.content).decode("utf-8")
+
+    prompt = """Eres SofIA, la asistente de eficiencia energética de Griin Energy — colombiana, cálida y experta.
+
+Un cliente acaba de mandarte su factura de energía. Analízala y responde con un mensaje de WhatsApp que:
+
+1. Extraiga estos datos clave del PDF:
+   - Nombre del cliente o empresa
+   - Operador (Enel, Air-e, Vatia, EPM, Afinia, etc.)
+   - Período facturado
+   - kWh consumidos (energía activa)
+   - Valor total a pagar en COP
+
+2. Luego genera un mensaje amigable que:
+   - Salude por el nombre si lo encontraste
+   - Resuma los datos clave en lenguaje sencillo
+   - Si es cliente pequeño (< 10,000 kWh): usa lenguaje cotidiano, compara con bombillos o neveras
+   - Si es cliente industrial grande (> 10,000 kWh): usa lenguaje más técnico pero igual de cercano
+   - Dé 1-2 observaciones o tips útiles basados en lo que ves en la factura
+   - Sea máximo 8 líneas
+   - Use *negritas* de WhatsApp para los números importantes
+   - Use 1-2 emojis máximo
+   - Firme como "SofIA 💚 · Griin Energy"
+
+Solo devuelve el mensaje, sin explicaciones adicionales."""
+
+    response = claude.messages.create(
+        model="claude-opus-4-6",  # Usamos Opus para lectura de PDFs — más preciso
+        max_tokens=500,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": pdf_b64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ],
+        }]
+    )
+
+    respuesta = response.content[0].text
+
+    # Guardar en historial para que SofIA recuerde el contexto
+    if telefono not in conversaciones:
+        conversaciones[telefono] = []
+    conversaciones[telefono].append({"role": "user", "content": "[Cliente envió su factura de energía en PDF]"})
+    conversaciones[telefono].append({"role": "assistant", "content": respuesta})
+
+    return respuesta
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -166,30 +239,38 @@ async def webhook_whatsapp(
     Body: str = Form(default=""),
     From: str = Form(default=""),
     To: str = Form(default=""),
+    NumMedia: int = Form(default=0),
+    MediaUrl0: str = Form(default=""),
+    MediaContentType0: str = Form(default=""),
 ):
     """
     Webhook que recibe mensajes entrantes de WhatsApp via Twilio.
-    Responde automáticamente con SofIA.
+    Detecta si viene un PDF (factura) o un mensaje de texto normal.
     """
-    logger.info(f"Mensaje recibido de {From}: {Body}")
+    logger.info(f"Mensaje de {From} | Media: {NumMedia} | Body: {Body}")
 
-    # Nota: validación de firma desactivada para Sandbox (se reactiva en producción)
-    # En producción con número propio, descomentar esto:
-    # validator = RequestValidator(os.environ["TWILIO_AUTH_TOKEN"])
-    # signature = request.headers.get("X-Twilio-Signature", "")
-    # url = str(request.url)
-    # form_data = dict(await request.form())
-    # if not validator.validate(url, form_data, signature):
-    #     raise HTTPException(status_code=403, detail="Firma inválida")
-
-    # Generar respuesta inteligente con Claude
     try:
-        respuesta = generar_respuesta_chat(Body, From)
+        # ── ¿Viene un PDF? ───────────────────────────────────────────────────
+        if NumMedia > 0 and "pdf" in MediaContentType0.lower():
+            logger.info(f"PDF recibido: {MediaUrl0}")
+            respuesta = analizar_factura_pdf(MediaUrl0, From)
+
+        # ── ¿Viene una imagen (foto de la factura)? ──────────────────────────
+        elif NumMedia > 0 and MediaContentType0.lower().startswith("image/"):
+            respuesta = (
+                "¡Hola! 👋 Vi que me mandaste una imagen de tu factura.\n\n"
+                "Para analizarla mejor, ¿me la puedes enviar en formato *PDF*? "
+                "Así puedo leer todos los datos con precisión. 💚"
+            )
+
+        # ── Mensaje de texto normal ──────────────────────────────────────────
+        else:
+            respuesta = generar_respuesta_chat(Body, From)
+
     except Exception as e:
-        logger.error(f"Error generando respuesta con Claude: {e}")
+        logger.error(f"Error procesando mensaje de {From}: {e}")
         respuesta = "¡Hola! Soy SofIA de Griin Energy 💚. En este momento tengo un problema técnico — inténtalo de nuevo en unos minutos."
 
-    # Responder con TwiML — Twilio se encarga de enviar la respuesta
     twiml = MessagingResponse()
     twiml.message(respuesta)
     return Response(content=str(twiml), media_type="application/xml")
