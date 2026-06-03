@@ -124,25 +124,19 @@ async def webhook_whatsapp(
     # Respuesta básica a mensajes entrantes
     if any(word in mensaje_lower for word in ["hola", "hello", "hi", "buenas", "buenos", "quiubo", "info", "ayuda", "help"]):
         respuesta = (
-            "¡Hola, hola! 👋 ¡Qué bueno que escribiste!\n\n"
-            "Soy *SofIA*, tu amiga de energía de *Griin Energy* 💚\n\n"
-            "Estoy aquí para contarte cómo va el consumo eléctrico de tu empresa cada mes — "
-            "de forma sencilla, sin enredos y con todo el cariño del mundo.\n\n"
-            "Si tienes preguntas sobre tu factura o quieres saber cómo ahorrar, "
-            "escríbenos a info@griin.com.co 📧 ¡Con gusto te ayudamos!"
+            "¡Hola! 👋 Soy *SofIA*, de Griin Energy.\n\n"
+            "Estoy aquí para ayudarte a entender el consumo eléctrico de tu empresa cada mes. "
+            "Si tienes alguna pregunta sobre tu factura o quieres saber cómo ahorrar, cuéntame — estoy al pie. 💚"
         )
     elif any(word in mensaje_lower for word in ["gracias", "thank", "genial", "excelente", "perfecto"]):
         respuesta = (
-            "¡Ay, qué alegría leer eso! 😄💚\n\n"
-            "Para eso estamos, para ayudarte a entender tu energía y ahorrar. "
-            "Cualquier cosa que necesites, aquí estoy. ¡Hasta pronto!"
+            "¡Con mucho gusto! 😊 Para eso estamos.\n\n"
+            "Cualquier cosa que necesites, aquí me encuentras. 💚"
         )
     else:
         respuesta = (
-            "¡Hola! 😊 Soy *SofIA* de Griin Energy.\n\n"
-            "Recibo mensajes automáticos del consumo energético de tu empresa, "
-            "pero si tienes una pregunta o necesitas algo, "
-            "escríbele a nuestro equipo a info@griin.com.co — ¡ellos te atienden con todo el gusto! 💚"
+            "¡Hola! Soy *SofIA* de Griin Energy. 💚\n\n"
+            "Cuéntame en qué te puedo ayudar con el consumo eléctrico de tu empresa."
         )
 
     # Responder con TwiML — Twilio se encarga de enviar la respuesta
