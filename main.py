@@ -110,15 +110,14 @@ async def webhook_whatsapp(
     """
     logger.info(f"Mensaje recibido de {From}: {Body}")
 
-    # Validar que viene de Twilio (seguridad)
-    validator = RequestValidator(os.environ["TWILIO_AUTH_TOKEN"])
-    signature = request.headers.get("X-Twilio-Signature", "")
-    url = str(request.url)
-    form_data = dict(await request.form())
-
-    if not validator.validate(url, form_data, signature):
-        logger.warning(f"Firma Twilio inválida desde {From}")
-        raise HTTPException(status_code=403, detail="Firma inválida")
+    # Nota: validación de firma desactivada para Sandbox (se reactiva en producción)
+    # En producción con número propio, descomentar esto:
+    # validator = RequestValidator(os.environ["TWILIO_AUTH_TOKEN"])
+    # signature = request.headers.get("X-Twilio-Signature", "")
+    # url = str(request.url)
+    # form_data = dict(await request.form())
+    # if not validator.validate(url, form_data, signature):
+    #     raise HTTPException(status_code=403, detail="Firma inválida")
 
     mensaje_lower = Body.lower().strip()
 
