@@ -8,9 +8,9 @@ Autor: Malik (Claude) para Farid Hadad / Griin Energy
 import os
 import json
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from twilio.rest import Client as TwilioClient
-from twilio.request_validator import RequestValidator
+from twilio.twiml.messaging_response import MessagingResponse
 import anthropic
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -145,15 +145,10 @@ async def webhook_whatsapp(
             "escríbele a nuestro equipo a info@griin.com.co — ¡ellos te atienden con todo el gusto! 💚"
         )
 
-    # Enviar respuesta — usar el número que recibió el mensaje (sandbox o producción)
-    from_number = To if To.startswith("whatsapp:") else WHATSAPP_FROM
-    twilio.messages.create(
-        body=respuesta,
-        from_=from_number,
-        to=From,
-    )
-
-    return "OK"
+    # Responder con TwiML — Twilio se encarga de enviar la respuesta
+    twiml = MessagingResponse()
+    twiml.message(respuesta)
+    return Response(content=str(twiml), media_type="application/xml")
 
 
 @app.post("/enviar-resumen")
