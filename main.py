@@ -145,10 +145,11 @@ async def webhook_whatsapp(
             "escríbele a nuestro equipo a info@griin.com.co — ¡ellos te atienden con todo el gusto! 💚"
         )
 
-    # Enviar respuesta
+    # Enviar respuesta — usar el número que recibió el mensaje (sandbox o producción)
+    from_number = To if To.startswith("whatsapp:") else WHATSAPP_FROM
     twilio.messages.create(
         body=respuesta,
-        from_=WHATSAPP_FROM,
+        from_=from_number,
         to=From,
     )
 
