@@ -19,6 +19,16 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
+from clientes import CLIENTES, CLIENTES_POR_NOMBRE
+from drive_utils import (
+    get_drive_service,
+    get_subfolder_id,
+    get_latest_pdf,
+    download_as_base64,
+    CARPETA_FACTURA,
+    CARPETA_GENERACION,
+)
+
 load_dotenv()
 
 # ─── Logging ────────────────────────────────────────────────────────────────
@@ -189,7 +199,7 @@ Un cliente acaba de mandarte su factura de energía. Analízala y responde con u
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
     response = claude.messages.create(
-        model="claude-opus-4-6",  # Usamos Opus para lectura de PDFs — más preciso
+        model="claude-sonnet-4-6",  # Sonnet: misma calidad para PDFs, 5x más barato que Opus
         max_tokens=500,
         messages=[{
             "role": "user",
@@ -353,4 +363,176 @@ async def test_mensaje(telefono: str, nombre: str = "Cliente Test"):
         "twilio_sid": result.sid,
         "estado": result.status,
         "mensaje": mensaje,
+    }
+
+
+# ─── Helper: Analizar factura desde Google Drive ─────────────────────────────
+def analizar_factura_drive(pdf_b64: str, nombre_cliente: str) -> str:
+    """
+    Le pasa el PDF de la factura a Claude Opus y genera el resumen mensual
+    que SofIA envía proactivamente al cliente (no es respuesta a un mensaje).
+    """
+    prompt = f"""Eres SofIA, la asistente de eficiencia energética de Griin Energy — colombiana, cálida y experta.
+
+Griin Energy te pide que generes el *resumen mensual* de energía para el cliente *{nombre_cliente}*.
+Este mensaje va a llegar por WhatsApp directamente al cliente, enviado por Griin.
+
+Lee la factura del PDF y genera un mensaje de WhatsApp que:
+1. Extraiga del PDF:
+   - Operador (Enel, Air-e, Vatia, EPM, Afinia, etc.)
+   - Período facturado
+   - kWh consumidos (energía activa)
+   - Valor total a pagar en COP
+   - Variación vs mes anterior si aparece en la factura
+
+2. Redacte el mensaje así:
+   - Saluda al cliente por el nombre de la empresa ({nombre_cliente}) con calidez colombiana
+   - Resume los números clave del mes en lenguaje sencillo
+   - Si el consumo bajó vs el mes anterior: celébralo como un logro
+   - Si el consumo subió: menciónalo con tono positivo y motivador, sin regañar
+   - Da 1 tip útil basado en lo que ves en la factura
+   - Invita al cliente a escribirle si tiene preguntas
+   - Sea máximo 8 líneas
+   - Use *negritas* de WhatsApp para los números importantes
+   - Use 1-2 emojis máximo, naturales
+   - Firme como "SofIA 💚 · Griin Energy"
+
+Solo devuelve el mensaje, sin explicaciones adicionales."""
+
+    response = claude.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=500,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": pdf_b64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        }]
+    )
+    return response.content[0].text
+
+
+# ─── Flujo B: Endpoints Drive → WhatsApp ─────────────────────────────────────
+
+@app.get("/clientes")
+def listar_clientes():
+    """Lista todos los clientes y si tienen número configurado."""
+    return {
+        "total": len(CLIENTES),
+        "con_telefono": sum(1 for c in CLIENTES if c["telefono"]),
+        "clientes": [
+            {
+                "nombre": c["nombre"],
+                "telefono": c["telefono"] or "pendiente",
+                "activo": c["telefono"] is not None,
+            }
+            for c in CLIENTES
+        ],
+    }
+
+
+@app.post("/procesar-cliente/{nombre_cliente}")
+async def procesar_cliente(nombre_cliente: str):
+    """
+    Lee la factura más reciente del cliente en Drive, genera el resumen con
+    Claude y lo envía por WhatsApp.
+
+    Uso: POST /procesar-cliente/Ferreflex
+    """
+    cliente = CLIENTES_POR_NOMBRE.get(nombre_cliente.lower())
+    if not cliente:
+        raise HTTPException(status_code=404, detail=f"Cliente '{nombre_cliente}' no encontrado")
+
+    if not cliente["telefono"]:
+        raise HTTPException(status_code=400, detail=f"'{nombre_cliente}' no tiene teléfono configurado")
+
+    logger.info(f"Procesando cliente: {cliente['nombre']}")
+
+    # Conectar a Drive
+    drive = get_drive_service()
+
+    # Buscar subcarpeta "Factura Comercializadora"
+    factura_folder_id = get_subfolder_id(drive, cliente["folder_id"], CARPETA_FACTURA)
+    if not factura_folder_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No encontré la carpeta '{CARPETA_FACTURA}' para {cliente['nombre']}"
+        )
+
+    # Obtener el PDF más reciente
+    archivo = get_latest_pdf(drive, factura_folder_id)
+    if not archivo:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No hay PDFs en '{CARPETA_FACTURA}' para {cliente['nombre']}"
+        )
+
+    logger.info(f"PDF encontrado: {archivo['name']} ({archivo['modifiedTime']})")
+
+    # Descargar (maneja shortcuts automáticamente)
+    pdf_b64, mime_type = download_as_base64(drive, archivo)
+
+    # Generar mensaje con Claude
+    mensaje = analizar_factura_drive(pdf_b64, cliente["nombre"])
+
+    # Enviar por WhatsApp
+    result = twilio.messages.create(
+        body=mensaje,
+        from_=WHATSAPP_FROM,
+        to=f"whatsapp:{cliente['telefono']}",
+    )
+
+    logger.info(f"Mensaje enviado a {cliente['nombre']} ({cliente['telefono']}) | SID: {result.sid}")
+
+    return {
+        "ok": True,
+        "cliente": cliente["nombre"],
+        "archivo_procesado": archivo["name"],
+        "telefono": cliente["telefono"],
+        "twilio_sid": result.sid,
+        "estado": result.status,
+        "mensaje_enviado": mensaje,
+    }
+
+
+@app.post("/procesar-todos")
+async def procesar_todos():
+    """
+    Procesa todos los clientes que tienen teléfono configurado.
+    Lee su factura más reciente de Drive y envía el resumen por WhatsApp.
+
+    Uso: POST /procesar-todos
+    """
+    clientes_activos = [c for c in CLIENTES if c["telefono"]]
+    logger.info(f"Procesando {len(clientes_activos)} clientes activos")
+
+    resultados = []
+    errores = []
+
+    for cliente in clientes_activos:
+        try:
+            resultado = await procesar_cliente(cliente["nombre"])
+            resultados.append(resultado)
+            logger.info(f"✅ {cliente['nombre']} — OK")
+        except Exception as e:
+            logger.error(f"❌ {cliente['nombre']} — Error: {e}")
+            errores.append({"cliente": cliente["nombre"], "error": str(e)})
+
+    return {
+        "ok": True,
+        "procesados": len(resultados),
+        "errores": len(errores),
+        "detalle_errores": errores,
+        "resultados": resultados,
     }
