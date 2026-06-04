@@ -199,7 +199,7 @@ Un cliente acaba de mandarte su factura de energía. Analízala y responde con u
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
     response = claude.messages.create(
-        model="claude-sonnet-4-6",  # Sonnet: misma calidad para PDFs, 5x más barato que Opus
+        model="claude-haiku-4-5-20251001",  # Sonnet: misma calidad para PDFs, 5x más barato que Opus
         max_tokens=500,
         messages=[{
             "role": "user",
@@ -400,7 +400,7 @@ Lee la factura del PDF y genera un mensaje de WhatsApp que:
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
     response = claude.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-haiku-4-5-20251001",
         max_tokens=500,
         messages=[{
             "role": "user",
