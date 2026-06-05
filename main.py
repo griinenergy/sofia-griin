@@ -1,5 +1,5 @@
 """
-SofIA — Asistente de Eficiencia Energética de Griin
+SofIA â Asistente de Eficiencia EnergÃ©tica de Griin
 Backend principal: FastAPI + Twilio WhatsApp + Claude API
 
 Autor: Malik (Claude) para Farid Hadad / Griin Energy
@@ -26,16 +26,17 @@ from drive_utils import (
     get_latest_pdf,
     download_as_base64,
     CARPETA_FACTURA,
+    CARPETA_GRIIN,
     CARPETA_GENERACION,
 )
 
 load_dotenv()
 
-# ─── Logging ────────────────────────────────────────────────────────────────
+# âââ Logging ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sofia")
 
-# ─── Clientes ────────────────────────────────────────────────────────────────
+# âââ Clientes ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 twilio = TwilioClient(
     os.environ["TWILIO_ACCOUNT_SID"],
     os.environ["TWILIO_AUTH_TOKEN"],
@@ -44,11 +45,11 @@ claude = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 WHATSAPP_FROM = f"whatsapp:{os.environ['TWILIO_WHATSAPP_NUMBER']}"  # +19787966556
 
-# ─── App ─────────────────────────────────────────────────────────────────────
-app = FastAPI(title="SofIA — Griin Energy", version="0.1.0")
+# âââ App âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+app = FastAPI(title="SofIA â Griin Energy", version="0.1.0")
 
 
-# ─── Modelos ─────────────────────────────────────────────────────────────────
+# âââ Modelos âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 class ClienteEnergia(BaseModel):
     nombre: str          # Nombre del cliente / empresa
     telefono: str        # En formato +573XXXXXXXXX
@@ -63,29 +64,29 @@ class EnvioMasivoRequest(BaseModel):
     clientes: list[ClienteEnergia]
 
 
-# ─── Helper: Generar resumen con Claude ──────────────────────────────────────
+# âââ Helper: Generar resumen con Claude ââââââââââââââââââââââââââââââââââââââ
 def generar_resumen_energia(cliente: ClienteEnergia) -> str:
-    """Usa Claude para generar un resumen amigable del consumo energético."""
+    """Usa Claude para generar un resumen amigable del consumo energÃ©tico."""
 
     variacion = cliente.kwh_mes - cliente.kwh_mes_anterior
     pct = (variacion / cliente.kwh_mes_anterior * 100) if cliente.kwh_mes_anterior > 0 else 0
-    tendencia = "subió" if variacion > 0 else "bajó"
+    tendencia = "subiÃ³" if variacion > 0 else "bajÃ³"
 
-    prompt = f"""Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga que todos quisieran tener para entender temas de energía. Hablas como una colombiana real: usas expresiones como "¡Qué buenas noticias!", "¡Eso es un logro!", "¡Vamos con todo!", "¡Uy, hay oportunidad aquí!". Explicas las cosas de forma sencilla, como si le hablaras a alguien que no sabe nada de energía. Nunca eres fría ni corporativa — siempre cercana y positiva.
+    prompt = f"""Eres SofIA, la asistente de eficiencia energÃ©tica de Griin Energy. Eres una mujer colombiana muy cÃ¡lida, cercana y amigable â como la amiga que todos quisieran tener para entender temas de energÃ­a. Hablas como una colombiana real: usas expresiones como "Â¡QuÃ© buenas noticias!", "Â¡Eso es un logro!", "Â¡Vamos con todo!", "Â¡Uy, hay oportunidad aquÃ­!". Explicas las cosas de forma sencilla, como si le hablaras a alguien que no sabe nada de energÃ­a. Nunca eres frÃ­a ni corporativa â siempre cercana y positiva.
 
 Genera un mensaje de WhatsApp para el cliente {cliente.nombre}.
 El mensaje debe:
-- Ser máximo 6 líneas
-- Usar emojis con moderación (2-3 máximo), siempre alegres y apropiados
+- Ser mÃ¡ximo 6 lÃ­neas
+- Usar emojis con moderaciÃ³n (2-3 mÃ¡ximo), siempre alegres y apropiados
 - Saludar con calidez colombiana
 - Incluir el consumo del mes: {cliente.kwh_mes:,.0f} kWh
 - Mencionar que {tendencia} un {abs(pct):.1f}% vs el mes anterior ({cliente.kwh_mes_anterior:,.0f} kWh)
-- Si bajó: celebrarlo como un logro personal del cliente
-- Si subió: mencionarlo con tono positivo y motivador, sin regañar
+- Si bajÃ³: celebrarlo como un logro personal del cliente
+- Si subiÃ³: mencionarlo con tono positivo y motivador, sin regaÃ±ar
 - Incluir el costo: ${cliente.costo_mes:,.0f} COP
-- Terminar con una frase motivadora y cercana sobre el poder del ahorro energético
-- Usar *negritas* de WhatsApp solo para los números importantes
-- Firmar como "SofIA 💚 · Griin Energy"
+- Terminar con una frase motivadora y cercana sobre el poder del ahorro energÃ©tico
+- Usar *negritas* de WhatsApp solo para los nÃºmeros importantes
+- Firmar como "SofIA ð Â· Griin Energy"
 
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
@@ -97,74 +98,99 @@ Solo devuelve el mensaje, sin explicaciones adicionales."""
     return response.content[0].text
 
 
-# ─── Memoria de conversaciones por número de teléfono ────────────────────────
-# Diccionario en memoria: { "+573001234567": [ {role, content}, ... ] }
-# Se reinicia si el servidor se reinicia — suficiente para el MVP
+# âââ Memoria de conversaciones por nÃºmero de telÃ©fono ââââââââââââââââââââââââ
+# { "+573001234567": [ {role, content}, ... ] }
 conversaciones: dict[str, list] = {}
-MAX_MENSAJES_HISTORIAL = 20  # Últimos 20 mensajes (10 intercambios)
+MAX_MENSAJES_HISTORIAL = 20
 
-SYSTEM_PROMPT_SOFIA = """Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga experta en energía que todos quisieran tener.
+# âââ Memoria de datos energÃ©ticos por nÃºmero de telÃ©fono âââââââââââââââââââââ
+# Guardamos el resumen de datos del cliente para que SofIA pueda responder preguntas
+# { "+573001234567": "texto con datos del cliente" }
+datos_cliente: dict[str, str] = {}
+
+# Ãndice rÃ¡pido de telÃ©fono â cliente
+TELEFONO_A_CLIENTE = {c["telefono"]: c for c in CLIENTES if c["telefono"]}
+
+SYSTEM_PROMPT_SOFIA_BASE = """Eres SofIA, la asistente de eficiencia energÃ©tica de Griin Energy. Eres una mujer colombiana muy cÃ¡lida, cercana y amigable â como la amiga experta en energÃ­a que todos quisieran tener.
 
 Tu personalidad:
-- Hablas como colombiana real: usas expresiones como "¡Claro que sí!", "¡Uy, qué buena pregunta!", "¡Vamos con todo!", "¡Con mucho gusto!"
-- Explicas los temas técnicos de energía de forma sencilla, con ejemplos de la vida cotidiana
-- Eres positiva y motivadora, nunca regañas ni eres fría
-- Usas 1-2 emojis por mensaje, no más — natural, no forzado
-- Recuerdas lo que el usuario te ha contado en la conversación y lo usas naturalmente
+- Hablas como colombiana real: usas expresiones como "Â¡Claro que sÃ­!", "Â¡Uy, quÃ© buena pregunta!", "Â¡Vamos con todo!", "Â¡Con mucho gusto!"
+- Explicas los temas tÃ©cnicos de energÃ­a de forma sencilla, con ejemplos de la vida cotidiana
+- Eres positiva y motivadora, nunca regaÃ±as ni eres frÃ­a
+- Usas 1-2 emojis por mensaje, no mÃ¡s â natural, no forzado
+- Recuerdas lo que el usuario te ha contado en la conversaciÃ³n y lo usas naturalmente
 
 Tu conocimiento:
-- Eres experta en consumo energético empresarial en Colombia
-- Sabes sobre facturas de energía, kWh, tarifas, costo unitario (CU), operadores de red
-- Conoces estrategias de ahorro energético para empresas
-- Sabes sobre energías renovables, paneles solares, eficiencia
-- Griin Energy es tu empresa: ayuda a empresas colombianas a entender y optimizar su consumo eléctrico
+- Eres experta en consumo energÃ©tico empresarial en Colombia
+- Sabes sobre facturas de energÃ­a, kWh, tarifas, costo unitario (CU), operadores de red
+- Conoces estrategias de ahorro energÃ©tico para empresas
+- Sabes sobre energÃ­as renovables, paneles solares, eficiencia
+- Griin Energy es tu empresa: instala paneles solares y ayuda a empresas colombianas a reducir su factura de energÃ­a
 
 Reglas del formato:
-- Respuestas cortas y directas: máximo 5-6 líneas
-- Usa *negritas* de WhatsApp solo para términos clave
-- NUNCA mandes a nadie a un correo ni a otro canal — todo se resuelve aquí en WhatsApp
-- Si no sabes algo específico del cliente (su factura, su consumo), dile que pronto recibirá su resumen mensual de Griin"""
+- Respuestas cortas y directas: mÃ¡ximo 5-6 lÃ­neas
+- Usa *negritas* de WhatsApp solo para tÃ©rminos clave
+- NUNCA mandes a nadie a un correo ni a otro canal â todo se resuelve aquÃ­ en WhatsApp
+- NUNCA digas que el cliente recibirÃ¡ el resumen pronto â ya lo tienes, Ãºsalo para responder{datos_seccion}"""
 
 
-# ─── Helper: Respuesta inteligente al chat (con memoria) ─────────────────────
+def get_system_prompt(telefono: str) -> str:
+    """Construye el system prompt con datos del cliente si estÃ¡n disponibles."""
+    datos = datos_cliente.get(telefono, "")
+    if datos:
+        datos_seccion = f"""
+
+ââââââââââââââââââââââââââââââââââ
+DATOS REALES DEL CLIENTE (Ãºltimo mes):
+{datos}
+ââââââââââââââââââââââââââââââââââ
+
+Con estos datos puedes responder EXACTAMENTE preguntas como:
+- Â¿CuÃ¡nto consumÃ­? â usa los kWh del informe de generaciÃ³n solar
+- Â¿CuÃ¡nto ahorrÃ©? â usa la diferencia entre la factura comercializadora y la factura Griin
+- Â¿CuÃ¡nto me cobrÃ³ la comercializadora? â dato directo
+- Â¿CuÃ¡nto me cobrÃ³ Griin? â dato directo
+Responde SIEMPRE con los nÃºmeros reales. Nunca digas que no tienes la informaciÃ³n."""
+    else:
+        datos_seccion = ""
+    return SYSTEM_PROMPT_SOFIA_BASE.format(datos_seccion=datos_seccion)
+
+
+# âââ Helper: Respuesta inteligente al chat (con memoria) âââââââââââââââââââââ
 def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
     """Usa Claude para responder cualquier mensaje de WhatsApp como SofIA.
-    Guarda y usa el historial de la conversación por número de teléfono."""
+    Guarda y usa el historial + datos energÃ©ticos del cliente."""
 
-    # Obtener o crear historial para este número
     if telefono not in conversaciones:
         conversaciones[telefono] = []
 
     historial = conversaciones[telefono]
-
-    # Agregar el nuevo mensaje del usuario al historial
     historial.append({"role": "user", "content": mensaje})
 
-    # Llamar a Claude con todo el historial
+    # System prompt con datos del cliente inyectados si existen
+    system = get_system_prompt(telefono)
+
     response = claude.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
-        system=SYSTEM_PROMPT_SOFIA,
+        system=system,
         messages=historial
     )
 
     respuesta = response.content[0].text
-
-    # Guardar la respuesta de SofIA en el historial
     historial.append({"role": "assistant", "content": respuesta})
 
-    # Mantener solo los últimos N mensajes para no crecer infinito
     if len(historial) > MAX_MENSAJES_HISTORIAL:
         conversaciones[telefono] = historial[-MAX_MENSAJES_HISTORIAL:]
 
     return respuesta
 
 
-# ─── Helper: Leer factura PDF y generar análisis ─────────────────────────────
+# âââ Helper: Leer factura PDF y generar anÃ¡lisis âââââââââââââââââââââââââââââ
 def analizar_factura_pdf(media_url: str, telefono: str) -> str:
     """Descarga el PDF de la factura desde Twilio y pide a Claude que lo analice."""
 
-    # Descargar el PDF usando las credenciales de Twilio (requiere auth básica)
+    # Descargar el PDF usando las credenciales de Twilio (requiere auth bÃ¡sica)
     account_sid = os.environ["TWILIO_ACCOUNT_SID"]
     auth_token  = os.environ["TWILIO_AUTH_TOKEN"]
 
@@ -174,32 +200,32 @@ def analizar_factura_pdf(media_url: str, telefono: str) -> str:
 
     pdf_b64 = base64.standard_b64encode(resp.content).decode("utf-8")
 
-    prompt = """Eres SofIA, la asistente de eficiencia energética de Griin Energy — colombiana, cálida y experta.
+    prompt = """Eres SofIA, la asistente de eficiencia energÃ©tica de Griin Energy â colombiana, cÃ¡lida y experta.
 
-Un cliente acaba de mandarte su factura de energía. Analízala y responde con un mensaje de WhatsApp que:
+Un cliente acaba de mandarte su factura de energÃ­a. AnalÃ­zala y responde con un mensaje de WhatsApp que:
 
 1. Extraiga estos datos clave del PDF:
    - Nombre del cliente o empresa
    - Operador (Enel, Air-e, Vatia, EPM, Afinia, etc.)
-   - Período facturado
-   - kWh consumidos (energía activa)
-   - Valor total a pagar en COP
+   - PerÃ­odo facturado
+   - kWh consumidos (energÃ­a activa)
+   - Valor a pagar en COP
 
 2. Luego genera un mensaje amigable que:
    - Salude por el nombre si lo encontraste
    - Resuma los datos clave en lenguaje sencillo
-   - Si es cliente pequeño (< 10,000 kWh): usa lenguaje cotidiano, compara con bombillos o neveras
-   - Si es cliente industrial grande (> 10,000 kWh): usa lenguaje más técnico pero igual de cercano
-   - Dé 1-2 observaciones o tips útiles basados en lo que ves en la factura
-   - Sea máximo 8 líneas
-   - Use *negritas* de WhatsApp para los números importantes
-   - Use 1-2 emojis máximo
-   - Firme como "SofIA 💚 · Griin Energy"
+   - Si es cliente pequeÃ±o (< 10,000 kWh): usa lenguaje cotidiano, compara con bombillos o neveras
+   - Si es cliente industrial grande (> 10,000 kWh): usa lenguaje mÃ¡s tÃ©cnico pero igual de cercano
+   - DÃ© 1-2 observaciones o tips Ãºtiles basados en lo que ves en la factura
+   - Sea mÃ¡ximo 8 lÃ­neas
+   - Use *negritas* de WhatsApp para los nÃºmeros importantes
+   - Use 1-2 emojis mÃ¡ximo
+   - Firme como "SofIA ð Â· Griin Energy"
 
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
     response = claude.messages.create(
-        model="claude-haiku-4-5-20251001",  # Sonnet: misma calidad para PDFs, 5x más barato que Opus
+        model="claude-haiku-4-5-20251001",  # Sonnet: misma calidad para PDFs, 5x mÃ¡s barato que Opus
         max_tokens=500,
         messages=[{
             "role": "user",
@@ -225,17 +251,17 @@ Solo devuelve el mensaje, sin explicaciones adicionales."""
     # Guardar en historial para que SofIA recuerde el contexto
     if telefono not in conversaciones:
         conversaciones[telefono] = []
-    conversaciones[telefono].append({"role": "user", "content": "[Cliente envió su factura de energía en PDF]"})
+    conversaciones[telefono].append({"role": "user", "content": "[Cliente enviÃ³ su factura de energÃ­a en PDF]"})
     conversaciones[telefono].append({"role": "assistant", "content": respuesta})
 
     return respuesta
 
 
-# ─── Endpoints ───────────────────────────────────────────────────────────────
+# âââ Endpoints âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @app.get("/")
 def root():
-    return {"status": "SofIA activa ✅", "version": "0.1.0"}
+    return {"status": "SofIA activa â", "version": "0.1.0"}
 
 
 @app.get("/health")
@@ -260,26 +286,26 @@ async def webhook_whatsapp(
     logger.info(f"Mensaje de {From} | Media: {NumMedia} | Body: {Body}")
 
     try:
-        # ── ¿Viene un PDF? ───────────────────────────────────────────────────
+        # ââ Â¿Viene un PDF? âââââââââââââââââââââââââââââââââââââââââââââââââââ
         if NumMedia > 0 and "pdf" in MediaContentType0.lower():
             logger.info(f"PDF recibido: {MediaUrl0}")
             respuesta = analizar_factura_pdf(MediaUrl0, From)
 
-        # ── ¿Viene una imagen (foto de la factura)? ──────────────────────────
+        # ââ Â¿Viene una imagen (foto de la factura)? ââââââââââââââââââââââââââ
         elif NumMedia > 0 and MediaContentType0.lower().startswith("image/"):
             respuesta = (
-                "¡Hola! 👋 Vi que me mandaste una imagen de tu factura.\n\n"
-                "Para analizarla mejor, ¿me la puedes enviar en formato *PDF*? "
-                "Así puedo leer todos los datos con precisión. 💚"
+                "Â¡Hola! ð Vi que me mandaste una imagen de tu factura.\n\n"
+                "Para analizarla mejor, Â¿me la puedes enviar en formato *PDF*? "
+                "AsÃ­ puedo leer todos los datos con precisiÃ³n. ð"
             )
 
-        # ── Mensaje de texto normal ──────────────────────────────────────────
+        # ââ Mensaje de texto normal ââââââââââââââââââââââââââââââââââââââââââ
         else:
             respuesta = generar_respuesta_chat(Body, From)
 
     except Exception as e:
         logger.error(f"Error procesando mensaje de {From}: {e}")
-        respuesta = "¡Hola! Soy SofIA de Griin Energy 💚. En este momento tengo un problema técnico — inténtalo de nuevo en unos minutos."
+        respuesta = "Â¡Hola! Soy SofIA de Griin Energy ð. En este momento tengo un problema tÃ©cnico â intÃ©ntalo de nuevo en unos minutos."
 
     twiml = MessagingResponse()
     twiml.message(respuesta)
@@ -289,7 +315,7 @@ async def webhook_whatsapp(
 @app.post("/enviar-resumen")
 async def enviar_resumen(cliente: ClienteEnergia):
     """
-    Envía el resumen energético mensual a UN cliente.
+    EnvÃ­a el resumen energÃ©tico mensual a UN cliente.
     Usa Claude para generar el mensaje personalizado.
     """
     logger.info(f"Enviando resumen a {cliente.nombre} ({cliente.telefono})")
@@ -316,7 +342,7 @@ async def enviar_resumen(cliente: ClienteEnergia):
 @app.post("/enviar-masivo")
 async def enviar_masivo(payload: EnvioMasivoRequest):
     """
-    Envía resúmenes energéticos a TODOS los clientes del mes.
+    EnvÃ­a resÃºmenes energÃ©ticos a TODOS los clientes del mes.
     Endpoint principal para el flujo mensual de Griin (17 clientes).
     """
     resultados = []
@@ -342,14 +368,14 @@ async def enviar_masivo(payload: EnvioMasivoRequest):
 @app.post("/test-mensaje")
 async def test_mensaje(telefono: str, nombre: str = "Cliente Test"):
     """
-    Envía un mensaje de prueba para verificar que WhatsApp funciona.
+    EnvÃ­a un mensaje de prueba para verificar que WhatsApp funciona.
     Uso: POST /test-mensaje?telefono=+573XXXXXXXXX&nombre=Farid
     """
     mensaje = (
-        f"¡Hola {nombre}! 👋\n\n"
-        "Este es un mensaje de prueba de *SofIA*, el asistente de eficiencia energética de Griin Energy.\n\n"
-        "Si recibes esto, ¡todo está funcionando correctamente! ✅\n\n"
-        "_SofIA · Griin Energy_"
+        f"Â¡Hola {nombre}! ð\n\n"
+        "Este es un mensaje de prueba de *SofIA*, el asistente de eficiencia energÃ©tica de Griin Energy.\n\n"
+        "Si recibes esto, Â¡todo estÃ¡ funcionando correctamente! â\n\n"
+        "_SofIA Â· Griin Energy_"
     )
 
     result = twilio.messages.create(
@@ -366,68 +392,111 @@ async def test_mensaje(telefono: str, nombre: str = "Cliente Test"):
     }
 
 
-# ─── Helper: Analizar factura desde Google Drive ─────────────────────────────
-def analizar_factura_drive(pdf_b64: str, nombre_cliente: str) -> str:
+# âââ Helper: Analizar las 3 carpetas Drive y generar resumen completo âââââââââ
+def analizar_tres_carpetas(
+    factura_b64: str | None,
+    griin_b64: str | None,
+    generacion_b64: str | None,
+    nombre_cliente: str,
+) -> tuple[str, str]:
     """
-    Le pasa el PDF de la factura a Claude Opus y genera el resumen mensual
-    que SofIA envía proactivamente al cliente (no es respuesta a un mensaje).
+    Lee las 3 fuentes de datos del cliente y genera:
+    1. Un mensaje de WhatsApp para enviar al cliente
+    2. Un bloque de datos estructurados para guardar en memoria (datos_cliente)
+
+    Retorna (mensaje_whatsapp, datos_para_memoria)
     """
-    prompt = f"""Eres SofIA, la asistente de eficiencia energética de Griin Energy — colombiana, cálida y experta.
+    # Construir el contenido del mensaje con los PDFs disponibles
+    content = []
 
-Griin Energy te pide que generes el *resumen mensual* de energía para el cliente *{nombre_cliente}*.
-Este mensaje va a llegar por WhatsApp directamente al cliente, enviado por Griin.
+    if factura_b64:
+        content.append({
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": factura_b64},
+            "title": "Factura Comercializadora (Air-e, Enel, EPM, etc.)",
+        })
+    if griin_b64:
+        content.append({
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": griin_b64},
+            "title": "Factura Griin Energy",
+        })
+    if generacion_b64:
+        content.append({
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": generacion_b64},
+            "title": "Informe de GeneraciÃ³n Solar",
+        })
 
-Lee la factura del PDF y genera un mensaje de WhatsApp que:
-1. Extraiga del PDF:
-   - Operador (Enel, Air-e, Vatia, EPM, Afinia, etc.)
-   - Período facturado
-   - kWh consumidos (energía activa)
-   - Valor total a pagar en COP
-   - Variación vs mes anterior si aparece en la factura
+    prompt = f"""Eres SofIA, la asistente de eficiencia energÃ©tica de Griin Energy â colombiana, cÃ¡lida y experta.
 
-2. Redacte el mensaje así:
-   - Saluda al cliente por el nombre de la empresa ({nombre_cliente}) con calidez colombiana
-   - Resume los números clave del mes en lenguaje sencillo
-   - Si el consumo bajó vs el mes anterior: celébralo como un logro
-   - Si el consumo subió: menciónalo con tono positivo y motivador, sin regañar
-   - Da 1 tip útil basado en lo que ves en la factura
-   - Invita al cliente a escribirle si tiene preguntas
-   - Sea máximo 8 líneas
-   - Use *negritas* de WhatsApp para los números importantes
-   - Use 1-2 emojis máximo, naturales
-   - Firme como "SofIA 💚 · Griin Energy"
+Tienes {len(content)} documento(s) del cliente *{nombre_cliente}*. Analiza TODOS y haz DOS cosas:
 
-Solo devuelve el mensaje, sin explicaciones adicionales."""
+"ââââââââââââââââââââââââââââââââââââ
+PARTE 1 â DATOS ESTRUCTURADOS (para memoria interna)
+âââââââââââââââââââââââââââââââââââââ
+Extrae exactamente esto (sin inventar, si no estÃ¡ en los docs escribe "No disponible"):
+
+PERIODO: [mes y aÃ±o]
+COMERCIALIZADORA: [nombre operador]
+KWH_CONSUMIDOS: [nÃºmero kWh facturados por la comercializadora]
+COSTO_COMERCIALIZADORA: [valor total en COP]
+COSTO_GRIIN: [valor total factura Griin en COP]
+AHORRO_MES: [diferencia entre comercializadora y Griin en COP â si Griin es menor, el ahorro es positivo]
+KWH_GENERADOS_SOLAR: [kWh generados por el sistema solar segÃºn informe]
+AUTOCONSUMO_KWH: [kWh de autoconsumo solar si aparece]
+INYECCION_RED: [kWh inyectados a la red si aparece]
+NOTA: [cualquier dato relevante adicional]
+
+âââââââââââââââââââââââââââââââââââââ
+PARTE 2 â MENSAJE WHATSAPP PARA EL CLIENTE
+âââââââââââââââââââââââââââââââââââââ
+Genera el mensaje asÃ­:
+- Saluda a {nombre_cliente} con calidez colombiana
+- Muestra la factura de la comercializadora (kWh + costo)
+- Muestra lo que cobrÃ³ Griin
+- Calcula y celebra el ahorro real en COP
+- Muestra la generaciÃ³n solar del mes (kWh generados)
+- Si el consumo bajÃ³ vs anterior: celÃ©bralo
+- Da 1 tip Ãºtil y cercano
+- Invita a escribir si tienen preguntas
+- MÃ¡ximo 10 lÃ­neas, *negritas* para nÃºmeros, 1-2 emojis
+- Firma: "SofIA ð Â· Griin Energy"
+
+Formato de respuesta â EXACTAMENTE asÃ­, con los separadores:
+===DATOS===
+[datos estructurados de la PARTE 1]
+===MENSAJE===
+[mensaje de WhatsApp de la PARTE 2]"""
+
+    content.append({"type": "text", "text": prompt})
 
     response = claude.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=500,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": pdf_b64,
-                    },
-                },
-                {
-                    "type": "text",
-                    "text": prompt,
-                },
-            ],
-        }]
+        max_tokens=800,
+        messages=[{"role": "user", "content": content}]
     )
-    return response.content[0].text
+
+    raw = response.content[0].text
+
+    # Separar datos del mensaje
+    if "===DATOS===" in raw and "===MENSAJE===" in raw:
+        partes = raw.split("===MENSAJE===")
+        datos = partes[0].replace("===DATOS===", "").strip()
+        mensaje = partes[1].strip()
+    else:
+        # Fallback si Claude no siguiÃ³ el formato
+        datos = raw
+        mensaje = raw
+
+    return mensaje, datos
 
 
-# ─── Flujo B: Endpoints Drive → WhatsApp ─────────────────────────────────────
+# âââ Flujo B: Endpoints Drive â WhatsApp âââââââââââââââââââââââââââââââââââââ
 
 @app.get("/clientes")
 def listar_clientes():
-    """Lista todos los clientes y si tienen número configurado."""
+    """Lista todos los clientes y si tienen nÃºmero configurado."""
     return {
         "total": len(CLIENTES),
         "con_telefono": sum(1 for c in CLIENTES if c["telefono"]),
@@ -445,8 +514,10 @@ def listar_clientes():
 @app.post("/procesar-cliente/{nombre_cliente}")
 async def procesar_cliente(nombre_cliente: str):
     """
-    Lee la factura más reciente del cliente en Drive, genera el resumen con
-    Claude y lo envía por WhatsApp.
+    Lee las 3 carpetas del cliente en Drive (Factura Comercializadora +
+    Factura Griin + Informe GeneraciÃ³n), genera el resumen completo con
+    Claude y lo envÃ­a por WhatsApp. TambiÃ©n guarda los datos en memoria
+    para que SofIA pueda responder preguntas despuÃ©s.
 
     Uso: POST /procesar-cliente/Ferreflex
     """
@@ -455,62 +526,103 @@ async def procesar_cliente(nombre_cliente: str):
         raise HTTPException(status_code=404, detail=f"Cliente '{nombre_cliente}' no encontrado")
 
     if not cliente["telefono"]:
-        raise HTTPException(status_code=400, detail=f"'{nombre_cliente}' no tiene teléfono configurado")
+        raise HTTPException(status_code=400, detail=f"'{nombre_cliente}' no tiene telÃ©fono configurado")
 
     logger.info(f"Procesando cliente: {cliente['nombre']}")
-
-    # Conectar a Drive
     drive = get_drive_service()
 
-    # Buscar subcarpeta "Factura Comercializadora"
-    factura_folder_id = get_subfolder_id(drive, cliente["folder_id"], CARPETA_FACTURA)
-    if not factura_folder_id:
+    archivos_procesados = []
+    factura_b64 = griin_b64 = generacion_b64 = None
+
+    # ââ 1. Factura Comercializadora ââââââââââââââââââââââââââââââââââââââââââ
+    folder_id = get_subfolder_id(drive, cliente["folder_id"], CARPETA_FACTURA)
+    if folder_id:
+        archivo = get_latest_pdf(drive, folder_id)
+        if archivo:
+            factura_b64, _ = download_as_base64(drive, archivo)
+            archivos_procesados.append(archivo["name"])
+            logger.info(f"â Factura Comercializadora: {archivo['name']}")
+        else:
+            logger.warning(f"â ï¸ Sin PDFs en '{CARPETA_FACTURA}' para {cliente['nombre']}")
+    else:
+        logger.warning(f"â ï¸ Carpeta '{CARPETA_FACTURA}' no encontrada para {cliente['nombre']}")
+
+    # ââ 2. Factura Griin âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    folder_id = get_subfolder_id(drive, cliente["folder_id"], CARPETA_GRIIN)
+    if folder_id:
+        archivo = get_latest_pdf(drive, folder_id)
+        if archivo:
+            griin_b64, _ = download_as_base64(drive, archivo)
+            archivos_procesados.append(archivo["name"])
+            logger.info(f"â Factura Griin: {archivo['name']}")
+        else:
+            logger.warning(f"â ï¸ Sin PDFs en '{CARPETA_GRIIN}' para {cliente['nombre']}")
+    else:
+        logger.warning(f"â ï¸ Carpeta '{CARPETA_GRIIN}' no encontrada para {cliente['nombre']}")
+
+    # ââ 3. Informe GeneraciÃ³n ââââââââââââââââââââââââââââââââââââââââââââââââ
+    folder_id = get_subfolder_id(drive, cliente["folder_id"], CARPETA_GENERACION)
+    if folder_id:
+        archivo = get_latest_pdf(drive, folder_id)
+        if archivo:
+            generacion_b64, _ = download_as_base64(drive, archivo)
+            archivos_procesados.append(archivo["name"])
+            logger.info(f"â Informe GeneraciÃ³n: {archivo['name']}")
+        else:
+            logger.warning(f"â ï¸ Sin PDFs en '{CARPETA_GENERACION}' para {cliente['nombre']}")
+    else:
+        logger.warning(f"â ï¸ Carpeta '{CARPETA_GENERACION}' no encontrada para {cliente['nombre']}")
+
+    if not factura_b64 and not griin_b64 and not generacion_b64:
         raise HTTPException(
             status_code=404,
-            detail=f"No encontré la carpeta '{CARPETA_FACTURA}' para {cliente['nombre']}"
+            detail=f"No se encontrÃ³ ningÃºn documento para {cliente['nombre']}"
         )
 
-    # Obtener el PDF más reciente
-    archivo = get_latest_pdf(drive, factura_folder_id)
-    if not archivo:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No hay PDFs en '{CARPETA_FACTURA}' para {cliente['nombre']}"
-        )
+    # ââ Generar mensaje con Claude (3 documentos) ââââââââââââââââââââââââââââ
+    mensaje, datos = analizar_tres_carpetas(
+        factura_b64, griin_b64, generacion_b64, cliente["nombre"]
+    )
 
-    logger.info(f"PDF encontrado: {archivo['name']} ({archivo['modifiedTime']})")
+    # ââ Guardar datos en memoria para responder preguntas del cliente ââââââââ
+    telefono = cliente["telefono"]
+    datos_cliente[telefono] = datos
+    # TambiÃ©n inicializar/limpiar el historial de conversaciÃ³n con contexto fresco
+    if telefono not in conversaciones:
+        conversaciones[telefono] = []
+    # AÃ±adir el resumen al historial para que haya contexto inmediato
+    conversaciones[telefono].append({
+        "role": "assistant",
+        "content": f"[Resumen mensual enviado a {cliente['nombre']}]\n{mensaje}"
+    })
+    logger.info(f"ð¾ Datos de {cliente['nombre']} guardados en memoria para respuestas de chat")
 
-    # Descargar (maneja shortcuts automáticamente)
-    pdf_b64, mime_type = download_as_base64(drive, archivo)
-
-    # Generar mensaje con Claude
-    mensaje = analizar_factura_drive(pdf_b64, cliente["nombre"])
-
-    # Enviar por WhatsApp
+    # ââ Enviar por WhatsApp ââââââââââââââââââââââââââââââââââââââââââââââââââ
     result = twilio.messages.create(
         body=mensaje,
         from_=WHATSAPP_FROM,
-        to=f"whatsapp:{cliente['telefono']}",
+        to=f"whatsapp:{telefono}",
     )
 
-    logger.info(f"Mensaje enviado a {cliente['nombre']} ({cliente['telefono']}) | SID: {result.sid}")
+    logger.info(f"ð¤ Mensaje enviado a {cliente['nombre']} ({telefono}) | SID: {result.sid}")
 
     return {
         "ok": True,
         "cliente": cliente["nombre"],
-        "archivo_procesado": archivo["name"],
-        "telefono": cliente["telefono"],
+        "archivos_procesados": archivos_procesados,
+        "telefono": telefono,
         "twilio_sid": result.sid,
         "estado": result.status,
         "mensaje_enviado": mensaje,
+        "datos_memoria": datos,
     }
 
 
 @app.post("/procesar-todos")
 async def procesar_todos():
     """
-    Procesa todos los clientes que tienen teléfono configurado.
-    Lee su factura más reciente de Drive y envía el resumen por WhatsApp.
+    Procesa todos los clientes que tienen telÃ©fono configurado.
+    Lee su factura mÃ¡s reciente de Drive y envÃ­a el resumen por WhatsApp.
 
     Uso: POST /procesar-todos
     """
@@ -524,9 +636,9 @@ async def procesar_todos():
         try:
             resultado = await procesar_cliente(cliente["nombre"])
             resultados.append(resultado)
-            logger.info(f"✅ {cliente['nombre']} — OK")
+            logger.info(f"â {cliente['nombre']} â OK")
         except Exception as e:
-            logger.error(f"❌ {cliente['nombre']} — Error: {e}")
+            logger.error(f"â {cliente['nombre']} â Error: {e}")
             errores.append({"cliente": cliente["nombre"], "error": str(e)})
 
     return {
