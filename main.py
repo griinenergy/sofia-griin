@@ -153,7 +153,7 @@ Con estos datos puedes responder EXACTAMENTE preguntas como:
 Responde SIEMPRE con los nÃºmeros reales. Nunca digas que no tienes la informaciÃ³n."""
     else:
         datos_seccion = ""
-    return SYSTEM_PROMPT_SOFIA_BASE.format(datos_seccion=datos_seccion)
+    return SYSTEM_PROMPT_SOFIA_BASE.replace("{datos_seccion}", datos_seccion)
 
 
 # âââ Helper: Respuesta inteligente al chat (con memoria) âââââââââââââââââââââ
