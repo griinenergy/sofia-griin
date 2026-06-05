@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
-from clientes import CLIENTES, CLIENTES_POR_NOMBRE
+from clientes import CLIENTES, CLIENTES_POR_NOMBRE, CLIENTES_POR_NIT
 from drive_utils import (
     get_drive_service,
     get_subfolder_id,
@@ -88,6 +88,28 @@ def guardar_datos_cliente(datos: dict):
 # Carga inicial al arrancar el servidor
 datos_cliente: dict[str, str] = cargar_datos_cliente()
 
+# --- Persistencia de relacion telefono -> NIT ---
+USUARIOS_NIT_FILE = "/tmp/usuarios_nit.json"
+
+
+def cargar_usuarios_nit() -> dict:
+    try:
+        with open(USUARIOS_NIT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def guardar_usuarios_nit(datos: dict):
+    try:
+        with open(USUARIOS_NIT_FILE, "w", encoding="utf-8") as f:
+            json.dump(datos, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error guardando usuarios_nit: {e}")
+
+
+usuarios_nit: dict[str, str] = cargar_usuarios_nit()
+
 # --- Memoria de conversaciones (en RAM, se reinicia con el servidor) ---
 conversaciones: dict[str, list] = {}
 MAX_MENSAJES_HISTORIAL = 20
@@ -116,16 +138,27 @@ Reglas del formato:
 - Usa *negritas* de WhatsApp solo para terminos clave
 - NUNCA mandes a nadie a un correo ni a otro canal - todo se resuelve aqui en WhatsApp
 - NUNCA digas que el cliente recibira el resumen pronto - ya lo tienes, usalo para responder
-- Si el cliente pregunta por su consumo, factura, ahorro o datos de energia y NO tienes datos guardados, pidele que te mande el PDF de su factura para analizarla - NUNCA le pidas que escriba los numeros a mano{datos_seccion}"""
+- Si el cliente pregunta por su consumo, factura, ahorro o datos de energia y NO tienes datos guardados, pidele que te mande el PDF de su factura para analizarla - NUNCA le pidas que escriba los numeros a mano
+- Si NO conoces el NIT del usuario, pídelo SIEMPRE antes de responder cualquier pregunta sobre energia, consumo o facturas{datos_seccion}"""
 
 
 def get_system_prompt(telefono: str) -> str:
     datos = datos_cliente.get(telefono, "")
+
+    # Determinar nombre del cliente por NIT identificado o telefono hardcodeado
+    nombre_cliente = ""
+    nit = usuarios_nit.get(telefono)
+    if nit and nit in CLIENTES_POR_NIT:
+        nombre_cliente = CLIENTES_POR_NIT[nit]["nombre"]
+    elif telefono in TELEFONO_A_CLIENTE:
+        nombre_cliente = TELEFONO_A_CLIENTE[telefono]["nombre"]
+
     if datos:
+        nombre_seccion = f"\nESTAS HABLANDO CON: {nombre_cliente}\n" if nombre_cliente else ""
         datos_seccion = f"""
 
 ---
-DATOS REALES DEL CLIENTE (ultimo mes):
+{nombre_seccion}DATOS REALES DEL CLIENTE (ultimo mes):
 {datos}
 ---
 
@@ -135,6 +168,13 @@ Con estos datos puedes responder EXACTAMENTE preguntas como:
 - Cuanto me cobro la comercializadora? -> COSTO_COMERCIALIZADORA
 - Cuanto me cobro Griin? -> COSTO_GRIIN
 Responde SIEMPRE con los numeros reales. Nunca digas que no tienes la informacion."""
+    elif nombre_cliente:
+        datos_seccion = f"""
+
+---
+ESTAS HABLANDO CON: {nombre_cliente}
+---
+Sabes con quien hablas. Si no tienes sus datos de consumo, pidele que mande el PDF de su factura."""
     else:
         datos_seccion = ""
     return SYSTEM_PROMPT_SOFIA_BASE.replace("{datos_seccion}", datos_seccion)
@@ -174,6 +214,38 @@ Solo devuelve el mensaje, sin explicaciones adicionales."""
 
 # --- Helper: Respuesta inteligente al chat ---
 def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
+    # Verificar si el cliente ya esta identificado (por telefono hardcodeado o NIT previo)
+    cliente_conocido = telefono in TELEFONO_A_CLIENTE or telefono in usuarios_nit
+
+    if not cliente_conocido:
+        # Revisar si el mensaje parece un NIT (solo digitos, 7-10 caracteres)
+        posible_nit = mensaje.strip().replace(" ", "").replace(".", "").replace("-", "")
+        if posible_nit.isdigit() and 7 <= len(posible_nit) <= 10:
+            cliente = CLIENTES_POR_NIT.get(posible_nit)
+            if cliente:
+                usuarios_nit[telefono] = posible_nit
+                guardar_usuarios_nit(usuarios_nit)
+                logger.info(f"NIT {posible_nit} asociado al telefono {telefono} ({cliente['nombre']})")
+                return (
+                    f"Hola! Te identifique como *{cliente['nombre']}* 💚\n\n"
+                    "Con mucho gusto te ayudo con tu informacion de energia. "
+                    "Como te llamas tu para tratarte bien?"
+                )
+            else:
+                logger.info(f"NIT {posible_nit} no encontrado en el sistema (telefono {telefono})")
+                return (
+                    "Hola! Soy SofIA de Griin Energy 💚\n\n"
+                    "No encontre ese NIT en nuestro sistema. "
+                    "Por favor verifica el numero e intentalo de nuevo, o comunicate con tu asesor Griin."
+                )
+        else:
+            # No es NIT y no esta identificado: pedir NIT
+            return (
+                "Hola! Soy *SofIA*, tu asistente de eficiencia energetica de Griin Energy 💚\n\n"
+                "Para ayudarte con tu informacion de energia, necesito identificarte primero.\n"
+                "Por favor escribe tu *NIT* (solo los numeros, sin puntos ni guiones)."
+            )
+
     if telefono not in conversaciones:
         conversaciones[telefono] = []
 
