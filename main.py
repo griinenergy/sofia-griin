@@ -115,7 +115,8 @@ Reglas del formato:
 - Respuestas cortas y directas: maximo 5-6 lineas
 - Usa *negritas* de WhatsApp solo para terminos clave
 - NUNCA mandes a nadie a un correo ni a otro canal - todo se resuelve aqui en WhatsApp
-- NUNCA digas que el cliente recibira el resumen pronto - ya lo tienes, usalo para responder{datos_seccion}"""
+- NUNCA digas que el cliente recibira el resumen pronto - ya lo tienes, usalo para responder
+- Si el cliente pregunta por su consumo, factura, ahorro o datos de energia y NO tienes datos guardados, pidele que te mande el PDF de su factura para analizarla - NUNCA le pidas que escriba los numeros a mano{datos_seccion}"""
 
 
 def get_system_prompt(telefono: str) -> str:
@@ -129,10 +130,10 @@ DATOS REALES DEL CLIENTE (ultimo mes):
 ---
 
 Con estos datos puedes responder EXACTAMENTE preguntas como:
-- Cuanto consumi? -> usa los kWh del informe de generacion solar
-- Cuanto ahorre? -> usa la diferencia entre la factura comercializadora y la factura Griin
-- Cuanto me cobro la comercializadora? -> dato directo
-- Cuanto me cobro Griin? -> dato directo
+- Cuanto consumi? -> usa KWH_CONSUMIDOS del informe
+- Cuanto ahorre? -> usa AHORRO_MES (ese ya tiene el calculo correcto: lo que hubieras pagado sin solar menos lo que pagaste con solar Air-e + Griin)
+- Cuanto me cobro la comercializadora? -> COSTO_COMERCIALIZADORA
+- Cuanto me cobro Griin? -> COSTO_GRIIN
 Responde SIEMPRE con los numeros reales. Nunca digas que no tienes la informacion."""
     else:
         datos_seccion = ""
@@ -216,22 +217,35 @@ def analizar_factura_pdf(media_url: str, telefono: str) -> str:
     if not texto:
         raise ValueError("No se pudo extraer texto del PDF")
 
+    contexto_previo = datos_cliente.get(telefono, "")
+    seccion_contexto = ""
+    if contexto_previo:
+        seccion_contexto = f"""
+Ademas, tienes guardados los datos del mes anterior de este cliente:
+--- DATOS MES ANTERIOR ---
+{contexto_previo}
+--- FIN DATOS ANTERIORES ---
+
+Usa estos datos para comparar y dar una respuesta mas completa: menciona si el consumo subio o bajo vs el mes anterior, si el ahorro mejoro, etc.
+"""
+
     prompt = f"""Eres SofIA, la asistente de eficiencia energetica de Griin Energy - colombiana, calida y experta.
 
 Un cliente te mando su factura de energia. Aqui esta el texto extraido:
 
 {texto}
-
+{seccion_contexto}
 Analiza esta factura y genera un mensaje de WhatsApp que:
 1. Salude al cliente por nombre si lo encuentras
 2. Resuma: operador, periodo, kWh consumidos, valor total en COP
 3. Si es cliente pequenyo (menos de 10,000 kWh): usa lenguaje cotidiano
 4. Si es cliente industrial grande (mas de 10,000 kWh): usa lenguaje tecnico pero cercano
-5. De 1-2 tips utiles basados en la factura
-6. Sea maximo 8 lineas
-7. Use *negritas* para los numeros importantes
-8. Use 1-2 emojis maximo
-9. Firme como "SofIA 💚 · Griin Energy"
+5. Si tienes datos del mes anterior, compara el consumo y menciona la tendencia
+6. De 1-2 tips utiles basados en la factura
+7. Sea maximo 8 lineas
+8. Use *negritas* para los numeros importantes
+9. Use 1-2 emojis maximo
+10. Firme como "SofIA 💚 · Griin Energy"
 
 Solo devuelve el mensaje, sin explicaciones adicionales."""
 
@@ -277,21 +291,23 @@ Tienes los documentos del cliente {nombre_cliente}. Analiza TODOS y haz DOS cosa
 Extrae exactamente esto (si no esta en los docs escribe "No disponible"):
 PERIODO: [mes y anyo]
 COMERCIALIZADORA: [nombre operador]
-KWH_CONSUMIDOS: [numero kWh facturados por la comercializadora]
-COSTO_COMERCIALIZADORA: [valor total en COP]
-COSTO_GRIIN: [valor total factura Griin en COP]
-AHORRO_MES: [diferencia entre comercializadora y Griin en COP]
-KWH_GENERADOS_SOLAR: [kWh generados por el sistema solar]
-AUTOCONSUMO_KWH: [kWh de autoconsumo solar si aparece]
+KWH_CONSUMIDOS: [numero kWh facturados por la comercializadora - solo los que vinieron de la red]
+AUTOCONSUMO_KWH: [kWh de autoconsumo solar - energia solar consumida directamente sin pasar por la red]
+KWH_GENERADOS_SOLAR: [total kWh generados por el sistema solar]
 INYECCION_RED: [kWh inyectados a la red si aparece]
+COSTO_COMERCIALIZADORA: [valor total factura Air-e / comercializadora en COP]
+COSTO_GRIIN: [valor total factura Griin Energy en COP]
+TARIFA_KWH: [costo por kWh de la comercializadora en COP. Calculalo como COSTO_COMERCIALIZADORA / KWH_CONSUMIDOS si no aparece explicito]
+COSTO_SIN_SOLAR: [lo que hubiera cobrado la comercializadora si NO existiera el sistema solar = (KWH_CONSUMIDOS + AUTOCONSUMO_KWH) x TARIFA_KWH. Si AUTOCONSUMO_KWH no esta disponible, usa solo KWH_CONSUMIDOS x TARIFA_KWH como aproximacion conservadora]
+AHORRO_MES: [ahorro real en COP = COSTO_SIN_SOLAR - (COSTO_COMERCIALIZADORA + COSTO_GRIIN). Este es el verdadero beneficio del sistema solar]
 NOTA: [cualquier dato relevante adicional]
 
 ===MENSAJE===
 Genera un mensaje de WhatsApp que:
 - Salude a {nombre_cliente} con calidez colombiana
-- Muestre la factura de la comercializadora (kWh + costo)
+- Muestre la factura de la comercializadora (kWh de red + costo)
 - Muestre lo que cobro Griin
-- Calcule y celebre el ahorro real en COP
+- Muestre el ahorro real: "Sin el sistema solar hubieras pagado X, con Griin pagaste Y (Air-e + Griin), ahorraste Z"
 - Muestre la generacion solar del mes (kWh generados)
 - De 1 tip util y cercano
 - Invite a escribir si tienen preguntas
