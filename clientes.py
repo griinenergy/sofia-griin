@@ -1,15 +1,14 @@
 """
 Registro de clientes de Griin Energy.
 
-telefono = None      -> pendiente numero real, NO se envian mensajes
-telefono = "+57..."  -> activo, SofIA envia mensajes a este numero
-
-nit = "901149300"    -> NIT sin digito de verificacion ni puntos
-                        Los usuarios lo usan para identificarse con SofIA
+telefono = None      → pendiente número real, NO se envían mensajes
+telefono = "+57..."  → activo, SofIA envía mensajes a este número
 
 MODO TEST:
-  - Ferreflex    -> Farid    (+573122036674)
-  - Bodega Indal -> Valentina (+573235841469)
+  - Ferreflex  → Farid    (+573122036674)
+  - Bodega Indal → Valentina (+573235841469)
+
+nit = NIT sin dígito de verificación (para identificar cliente en chat)
 """
 
 CLIENTES = [
@@ -22,7 +21,7 @@ CLIENTES = [
     {
         "nombre": "Bodega Indal",
         "folder_id": "11mXGrEKCDtYILAJS7H1ZpArw1Og_dk3z",
-        "telefono": "+573235841469",
+        "telefono": "+573235841469",  # TEST: Valentina
         "nit": "901150824",
     },
     {
@@ -40,7 +39,7 @@ CLIENTES = [
     {
         "nombre": "Ferreflex",
         "folder_id": "1U7MRR6QKoWO5m6eK54twaLilCAvJqz09",
-        "telefono": "+573122036674",
+        "telefono": "+573122036674",  # TEST: Farid
         "nit": "901149300",
     },
     {
@@ -80,7 +79,7 @@ CLIENTES = [
         "nit": "901902288",
     },
     {
-        "nombre": "Politecnico de Monteria",
+        "nombre": "Politécnico de Montería",
         "folder_id": "1xjg2MF9JisxtNuxqv24ts8y7myReg_qB",
         "telefono": None,
         "nit": "900929837",
@@ -104,7 +103,7 @@ CLIENTES = [
         "nit": "3608192",
     },
     {
-        "nombre": "Frios Caracoli",
+        "nombre": "Fríos Caracolí",
         "folder_id": "1-tdhb0LiFnV9BCvE0NibLrqN9wFarYUA",
         "telefono": None,
         "nit": None,
@@ -123,6 +122,6 @@ CLIENTES = [
     },
 ]
 
-# Indices para busqueda rapida
+# Índices para búsqueda rápida
 CLIENTES_POR_NOMBRE = {c["nombre"].lower(): c for c in CLIENTES}
 CLIENTES_POR_NIT = {c["nit"]: c for c in CLIENTES if c["nit"]}
