@@ -1,6 +1,6 @@
 """
 Utilidades para leer archivos de Google Drive.
-Autenticación: OAuth 2.0 via variables de entorno:
+Autenticacion: OAuth 2.0 via variables de entorno:
   - GOOGLE_CLIENT_ID
   - GOOGLE_CLIENT_SECRET
   - GOOGLE_REFRESH_TOKEN
@@ -11,6 +11,7 @@ import io
 import base64
 import logging
 import pdfplumber
+import openpyxl
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -19,7 +20,7 @@ logger = logging.getLogger("sofia.drive")
 
 CARPETA_FACTURA    = "Factura Comercializadora"
 CARPETA_GRIIN      = "Factura Griin"
-CARPETA_GENERACION = "Informe Generación"
+CARPETA_GENERACION = "Informe Generacion"
 
 
 def get_drive_service():
@@ -54,12 +55,11 @@ def get_subfolder_id(drive, parent_id: str, subfolder_name: str) -> str | None:
     return files[0]["id"] if files else None
 
 
-def get_latest_pdf(drive, folder_id: str) -> dict | None:
+def get_latest_file(drive, folder_id: str) -> dict | None:
+    """Retorna el archivo mas reciente en la carpeta (PDF, Excel, o shortcut)."""
     results = drive.files().list(
         q=(
             f"'{folder_id}' in parents"
-            f" and (name contains '.pdf' or mimeType = 'application/pdf'"
-            f"      or mimeType = 'application/vnd.google-apps.shortcut')"
             f" and trashed = false"
         ),
         orderBy="modifiedTime desc",
@@ -69,21 +69,20 @@ def get_latest_pdf(drive, folder_id: str) -> dict | None:
     files = results.get("files", [])
     if not files:
         return None
-    for f in files:
-        if f["mimeType"] == "application/vnd.google-apps.shortcut":
-            target_mime = f.get("shortcutDetails", {}).get("targetMimeType", "")
-            if "pdf" in target_mime.lower():
-                return f
-        elif "pdf" in f["mimeType"].lower() or f["name"].lower().endswith(".pdf"):
-            return f
     return files[0]
 
 
-def _descargar_bytes(drive, file: dict) -> bytes:
-    """Descarga un archivo de Drive (resuelve shortcuts) y retorna los bytes."""
+# Mantener get_latest_pdf como alias para compatibilidad
+def get_latest_pdf(drive, folder_id: str) -> dict | None:
+    return get_latest_file(drive, folder_id)
+
+
+def _descargar_bytes(drive, file: dict) -> tuple[bytes, str]:
+    """Descarga un archivo de Drive (resuelve shortcuts) y retorna (bytes, nombre_real)."""
     file_id = file["id"]
     mime_type = file["mimeType"]
     file_name = file["name"]
+
     if mime_type == "application/vnd.google-apps.shortcut":
         target_id = file.get("shortcutDetails", {}).get("targetId")
         if not target_id:
@@ -91,26 +90,52 @@ def _descargar_bytes(drive, file: dict) -> bytes:
         logger.info(f"Shortcut: '{file_name}' -> {target_id}")
         real_file = drive.files().get(fileId=target_id, fields="id, name, mimeType").execute()
         file_id = real_file["id"]
+        file_name = real_file["name"]
+
     content = drive.files().get_media(fileId=file_id).execute()
     logger.info(f"Descargado: {len(content):,} bytes")
-    return content
+    return content, file_name
 
 
 def download_as_base64(drive, file: dict) -> tuple[str, str]:
-    content = _descargar_bytes(drive, file)
+    content, _ = _descargar_bytes(drive, file)
     encoded = base64.standard_b64encode(content).decode("utf-8")
     return encoded, file["mimeType"]
 
 
 def download_as_text(drive, file: dict) -> str:
     """
-    Descarga un PDF de Drive y extrae su texto con pdfplumber.
-    Retorna el texto plano — mucho más barato que mandar el PDF completo a Claude.
+    Descarga un archivo de Drive y extrae su texto.
+    Soporta PDF (pdfplumber) y Excel (openpyxl).
     """
-    content = _descargar_bytes(drive, file)
-    texto = ""
-    with pdfplumber.open(io.BytesIO(content)) as pdf:
-        for page in pdf.pages:
-            texto += (page.extract_text() or "") + "\n"
-    logger.info(f"Texto extraído: {len(texto):,} caracteres")
-    return texto.strip()
+    content, file_name = _descargar_bytes(drive, file)
+    nombre = file_name.lower()
+
+    # Excel
+    if nombre.endswith(".xlsx") or nombre.endswith(".xls"):
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            texto = ""
+            for sheet in wb.worksheets:
+                texto += f"[Hoja: {sheet.title}]\n"
+                for row in sheet.iter_rows(values_only=True):
+                    fila = [str(v) for v in row if v is not None]
+                    if fila:
+                        texto += " | ".join(fila) + "\n"
+            logger.info(f"Texto Excel extraido: {len(texto):,} caracteres")
+            return texto.strip()
+        except Exception as e:
+            logger.error(f"Error leyendo Excel: {e}")
+            return ""
+
+    # PDF (default)
+    try:
+        texto = ""
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for page in pdf.pages:
+                texto += (page.extract_text() or "") + "\n"
+        logger.info(f"Texto PDF extraido: {len(texto):,} caracteres")
+        return texto.strip()
+    except Exception as e:
+        logger.error(f"Error leyendo PDF: {e}")
+        return ""
