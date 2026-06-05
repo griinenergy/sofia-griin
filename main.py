@@ -7,6 +7,7 @@ Autor: Malik (Claude) para Farid Hadad / Griin Energy
 import os
 import io
 import json
+import time
 import base64
 import httpx
 import pdfplumber
@@ -108,14 +109,13 @@ def guardar_usuarios_nit(datos: dict):
         logger.error(f"Error guardando usuarios_nit: {e}")
 
 
-usuarios_nit: dict[str, str] = cargar_usuarios_nit()
+usuarios_nit: dict[str, dict] = cargar_usuarios_nit()
+
+SESSION_EXPIRY_SECONDS = 86400  # 24 horas
 
 # --- Memoria de conversaciones (en RAM, se reinicia con el servidor) ---
 conversaciones: dict[str, list] = {}
 MAX_MENSAJES_HISTORIAL = 20
-
-# Indice rapido de telefono a cliente
-TELEFONO_A_CLIENTE = {c["telefono"]: c for c in CLIENTES if c["telefono"]}
 
 SYSTEM_PROMPT_SOFIA_BASE = """Eres SofIA, la asistente de eficiencia energetica de Griin Energy. Eres cercana y calida como colombiana, pero siempre profesional - como una colega experta en energia que trata bien a sus clientes.
 
@@ -146,13 +146,10 @@ Reglas del formato:
 def get_system_prompt(telefono: str) -> str:
     datos = datos_cliente.get(telefono, "")
 
-    # Determinar nombre del cliente por NIT identificado o telefono hardcodeado
     nombre_cliente = ""
-    nit = usuarios_nit.get(telefono)
-    if nit and nit in CLIENTES_POR_NIT:
-        nombre_cliente = CLIENTES_POR_NIT[nit]["nombre"]
-    elif telefono in TELEFONO_A_CLIENTE:
-        nombre_cliente = TELEFONO_A_CLIENTE[telefono]["nombre"]
+    session = usuarios_nit.get(telefono)
+    if session:
+        nombre_cliente = session.get("nombre", "")
 
     if datos:
         nombre_seccion = f"\nESTAS HABLANDO CON: {nombre_cliente}\n" if nombre_cliente else ""
@@ -215,37 +212,53 @@ Solo devuelve el mensaje, sin explicaciones adicionales."""
 
 # --- Helper: Respuesta inteligente al chat ---
 def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
-    # Verificar si el cliente ya esta identificado (por telefono hardcodeado o NIT previo)
-    cliente_conocido = telefono in TELEFONO_A_CLIENTE or telefono in usuarios_nit
+    session = usuarios_nit.get(telefono)
 
-    if not cliente_conocido:
+    # Verificar expiracion de sesion (24 horas)
+    if session:
+        edad = time.time() - session.get("ultimo_mensaje_timestamp", 0)
+        if edad > SESSION_EXPIRY_SECONDS:
+            logger.info(f"Sesion expirada para {telefono} ({edad/3600:.1f}h) — pidiendo NIT de nuevo")
+            del usuarios_nit[telefono]
+            guardar_usuarios_nit(usuarios_nit)
+            conversaciones.pop(telefono, None)
+            session = None
+
+    if not session:
         # Revisar si el mensaje parece un NIT (solo digitos, 7-10 caracteres)
         posible_nit = mensaje.strip().replace(" ", "").replace(".", "").replace("-", "")
         if posible_nit.isdigit() and 7 <= len(posible_nit) <= 10:
             cliente = CLIENTES_POR_NIT.get(posible_nit)
             if cliente:
-                usuarios_nit[telefono] = posible_nit
+                usuarios_nit[telefono] = {
+                    "nit": posible_nit,
+                    "nombre": cliente["nombre"],
+                    "ultimo_mensaje_timestamp": time.time(),
+                }
                 guardar_usuarios_nit(usuarios_nit)
-                logger.info(f"NIT {posible_nit} asociado al telefono {telefono} ({cliente['nombre']})")
+                logger.info(f"NIT {posible_nit} asociado a {telefono} ({cliente['nombre']})")
                 return (
                     f"Hola! Te identifique como *{cliente['nombre']}* 💚\n\n"
                     "Con mucho gusto te ayudo con tu informacion de energia. "
-                    "Como te llamas tu para tratarte bien?"
+                    "Como te llamas para tratarte bien?"
                 )
             else:
-                logger.info(f"NIT {posible_nit} no encontrado en el sistema (telefono {telefono})")
+                logger.info(f"NIT {posible_nit} no encontrado (telefono {telefono})")
                 return (
                     "Hola! Soy SofIA de Griin Energy 💚\n\n"
                     "No encontre ese NIT en nuestro sistema. "
-                    "Por favor verifica el numero e intentalo de nuevo, o comunicate con tu asesor Griin."
+                    "Por favor verificalo e intentalo de nuevo, o comunicate con tu asesor Griin."
                 )
         else:
-            # No es NIT y no esta identificado: pedir NIT
             return (
                 "Hola! Soy *SofIA*, tu asistente de eficiencia energetica de Griin Energy 💚\n\n"
                 "Para ayudarte con tu informacion de energia, necesito identificarte primero.\n"
                 "Por favor escribe tu *NIT* (solo los numeros, sin puntos ni guiones)."
             )
+
+    # Sesion activa: actualizar timestamp
+    session["ultimo_mensaje_timestamp"] = time.time()
+    guardar_usuarios_nit(usuarios_nit)
 
     if telefono not in conversaciones:
         conversaciones[telefono] = []
