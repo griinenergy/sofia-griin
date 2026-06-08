@@ -162,7 +162,7 @@ Tu conocimiento:
 
 Formato:
 - Respuestas cortas: máximo 5-6 líneas
-- Usa *negritas* de WhatsApp solo para números clave
+- Usa *negritas* de WhatsApp para números clave — SIEMPRE asterisco SIMPLE (*texto*), NUNCA doble asterisco (**texto**)
 - NUNCA mandes a otro canal — todo se resuelve aquí
 - Si tienes datos del cliente, SIEMPRE responde con los números exactos{datos_seccion}"""
 
@@ -224,7 +224,9 @@ def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
                 "timestamp": ahora,
             }
             guardar_sesiones(sesiones)
+            conversaciones[telefono] = []
             logger.info(f"Sesión iniciada: {nombre} ({telefono})")
+            return f"¡Hola, *{nombre}*! 💚 Soy SofIA, tu asistente de energía de Griin. Ya te tengo identificado. ¿En qué te puedo ayudar hoy?"
         else:
             # Pedir identificación
             if telefono not in conversaciones:
