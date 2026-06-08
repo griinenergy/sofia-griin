@@ -164,7 +164,8 @@ Formato:
 - Respuestas cortas: máximo 5-6 líneas
 - Usa *negritas* de WhatsApp para números clave — SIEMPRE asterisco SIMPLE (*texto*), NUNCA doble asterisco (**texto**)
 - NUNCA mandes a otro canal — todo se resuelve aquí
-- Si tienes datos del cliente, SIEMPRE responde con los números exactos{datos_seccion}"""
+- Si tienes datos del cliente, SIEMPRE responde con los números exactos
+- Para calcular % cobertura solar: (kWh_solar ÷ (kWh_solar + kWh_red)) × 100{datos_seccion}"""
 
 
 def get_system_prompt(folder_id: str) -> str:
