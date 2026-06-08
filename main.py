@@ -252,12 +252,12 @@ def generar_respuesta_chat(mensaje: str, telefono: str) -> str:
 
     response = claude.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=400,
+        max_tokens=600,
         system=system,
         messages=historial,
     )
 
-    respuesta = response.content[0].text
+    respuesta = response.content[0].text.replace("**", "*")
     historial.append({"role": "assistant", "content": respuesta})
 
     if len(historial) > MAX_MENSAJES_HISTORIAL:
