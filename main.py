@@ -407,16 +407,26 @@ async def procesar_cliente(nombre_cliente: str):
     mensaje_enviado = None
     if cliente.get("telefono"):
         contexto = obtener_contexto_cliente(folder_id)
-        prompt = f"""Eres SofIA de Griin Energy. Tienes los documentos más recientes de {nombre}.
-Con base en los datos disponibles, genera un mensaje de WhatsApp que:
-- Salude al cliente con calidez colombiana
-- Muestre el resumen del último período (consumo, costo comercializadora, costo Griin, ahorro, generación solar)
-- Use *negritas* para los números
-- Sea máximo 8 líneas, 1-2 emojis
-- Firme como "SofIA 💚 · Griin Energy"
+        prompt = f"""Eres SofIA de Griin Energy. Genera un mensaje de WhatsApp para {nombre} con el resumen del último período.
+
+En la carpeta "Factura Griin" están todos los datos. Extrae exactamente:
+1. Consumo Air-e (kWh)
+2. Pago Air-e ($)
+3. Consumo Griin — generación solar (kWh)
+4. Pago Griin ($)
+5. Pesos ahorrados este mes ($)
+
+Reglas del mensaje:
+- Saludo cálido colombiano mencionando a {nombre}
+- Los 5 datos en líneas separadas con *negritas* para los números
+- Cierra destacando el ahorro
+- Máximo 8 líneas, 1-2 emojis
+- Firma exacta: "SofIA 💚 · Griin Energy"
+- NUNCA uses #, ---, corchetes [] ni "pendiente"
+- Si no encuentras un dato escribe "N/D", nunca lo inventes
 
 DOCUMENTOS:
-{contexto[:15000]}"""
+{contexto[:8000]}"""
 
         resp = claude.messages.create(
             model="claude-haiku-4-5-20251001",
