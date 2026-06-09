@@ -416,14 +416,14 @@ Con base en los datos disponibles, genera un mensaje de WhatsApp que:
 - Firme como "SofIA 💚 · Griin Energy"
 
 DOCUMENTOS:
-{contexto[:8000]}"""
+{contexto[:15000]}"""
 
         resp = claude.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}]
         )
-        mensaje_enviado = resp.content[0].text
+        mensaje_enviado = resp.content[0].text.replace("**", "*")
 
         twilio.messages.create(
             body=mensaje_enviado,
