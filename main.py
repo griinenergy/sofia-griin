@@ -4,6 +4,7 @@ Backend principal: FastAPI + Twilio WhatsApp + Claude API + Supabase
 """
 
 import os
+import re
 import json
 import base64
 import httpx
@@ -93,6 +94,32 @@ SESION_EXPIRY = 24 * 3600  # 24 horas
 
 
 # ─── Supabase: guardar y leer documentos ─────────────────────────────────────
+MESES_ES = {
+    "ene": "01", "feb": "02", "mar": "03", "abr": "04",
+    "may": "05", "jun": "06", "jul": "07", "ago": "08",
+    "sep": "09", "oct": "10", "nov": "11", "dic": "12",
+}
+
+def extraer_fecha_documento(texto: str) -> str | None:
+    """
+    Extrae la fecha de fin del período desde 'Mes reportado: Nov 28 - Dic 25 2025'.
+    Retorna formato 'YYYY-MM' (ej. '2025-12') para ordenamiento correcto.
+    Retorna None si no encuentra el patrón.
+    """
+    match = re.search(
+        r"Mes reportado:.*?-\s*(\w{3})\s+\d+\s+(\d{4})",
+        texto,
+        re.IGNORECASE,
+    )
+    if match:
+        mes_str = match.group(1).lower()[:3]
+        año    = match.group(2)
+        mes_num = MESES_ES.get(mes_str)
+        if mes_num:
+            return f"{año}-{mes_num}"
+    return None
+
+
 def guardar_documento_supabase(
     folder_id: str,
     nombre_cliente: str,
@@ -110,6 +137,7 @@ def guardar_documento_supabase(
             "archivo_nombre": archivo_nombre,
             "contenido_texto": contenido_texto,
             "drive_file_id": drive_file_id,
+            "fecha_documento": extraer_fecha_documento(contenido_texto),
         }, on_conflict="drive_file_id").execute()
         logger.info(f"✅ Supabase: guardado '{archivo_nombre}'")
     except Exception as e:
@@ -148,29 +176,27 @@ def obtener_contexto_cliente(folder_id: str) -> str:
 
 def obtener_contexto_reciente(folder_id: str) -> str:
     """
-    Para el resumen mensual: trae solo el último documento por carpeta
-    (máximo 3 docs en total). Escalable sin importar cuántos meses acumulen.
+    Para el resumen mensual: trae solo el documento más reciente por carpeta
+    (máximo 3 docs en total), ordenado por fecha_documento DESC.
+    Escalable sin importar cuántos meses acumulen.
     """
     try:
-        resp = supabase.table("documentos_energia")\
-            .select("carpeta, archivo_nombre, contenido_texto")\
-            .eq("folder_id", folder_id)\
-            .order("carpeta")\
-            .execute()
-
-        docs = resp.data
-        if not docs:
-            return ""
-
-        # Agrupar por carpeta — sobreescribir en cada iteración
-        # → al final queda el último doc de cada carpeta según Supabase
-        por_carpeta = {}
-        for doc in docs:
-            por_carpeta[doc["carpeta"]] = doc
-
+        carpetas = [CARPETA_FACTURA, CARPETA_GRIIN, CARPETA_GENERACION]
         secciones = []
-        for doc in por_carpeta.values():
-            if doc.get("contenido_texto"):
+
+        for carpeta in carpetas:
+            resp = supabase.table("documentos_energia")\
+                .select("carpeta, archivo_nombre, contenido_texto")\
+                .eq("folder_id", folder_id)\
+                .eq("carpeta", carpeta)\
+                .order("fecha_documento", desc=True)\
+                .order("procesado_at", desc=True)\
+                .limit(1)\
+                .execute()
+
+            docs = resp.data
+            if docs and docs[0].get("contenido_texto"):
+                doc = docs[0]
                 secciones.append(
                     f"--- {doc['carpeta']} | {doc['archivo_nombre']} ---\n"
                     f"{doc['contenido_texto'][:4000]}"
