@@ -146,6 +146,39 @@ def obtener_contexto_cliente(folder_id: str) -> str:
         return ""
 
 
+def obtener_contexto_reciente(folder_id: str) -> str:
+    """
+    Para el resumen mensual: trae solo el documento más reciente
+    de cada carpeta (máximo 3 docs en total).
+    Nunca crece aunque acumulen meses.
+    """
+    try:
+        carpetas = [CARPETA_FACTURA, CARPETA_GRIIN, CARPETA_GENERACION]
+        secciones = []
+
+        for carpeta in carpetas:
+            resp = supabase.table("documentos_energia")\
+                .select("carpeta, archivo_nombre, contenido_texto")\
+                .eq("folder_id", folder_id)\
+                .eq("carpeta", carpeta)\
+                .order("created_at", desc=True)\
+                .limit(1)\
+                .execute()
+
+            docs = resp.data
+            if docs and docs[0].get("contenido_texto"):
+                doc = docs[0]
+                secciones.append(
+                    f"--- {doc['carpeta']} | {doc['archivo_nombre']} ---\n"
+                    f"{doc['contenido_texto'][:4000]}"
+                )
+
+        return "\n\n".join(secciones)
+    except Exception as e:
+        logger.error(f"❌ Supabase error al leer contexto reciente: {e}")
+        return ""
+
+
 # ─── System prompt ────────────────────────────────────────────────────────────
 SYSTEM_PROMPT_BASE = """Eres SofIA, la asistente de eficiencia energética de Griin Energy. Eres una mujer colombiana muy cálida, cercana y amigable — como la amiga experta en energía que todos quisieran tener.
 
@@ -406,7 +439,7 @@ async def procesar_cliente(nombre_cliente: str):
     # Enviar resumen por WhatsApp si tiene teléfono
     mensaje_enviado = None
     if cliente.get("telefono"):
-        contexto = obtener_contexto_cliente(folder_id)
+        contexto = obtener_contexto_reciente(folder_id)
         prompt = f"""Eres SofIA de Griin Energy. Genera un mensaje de WhatsApp para {nombre} con el resumen energético.
 
 Si hay varios períodos en los documentos, usa SOLO el más reciente (el de fecha más alta en "Mes reportado:").
@@ -429,7 +462,7 @@ Formato del mensaje WhatsApp:
 - NUNCA uses #, ---, ni corchetes []
 
 DOCUMENTOS:
-{contexto[:8000]}"""
+{contexto}"""
 
         resp = claude.messages.create(
             model="claude-haiku-4-5-20251001",
