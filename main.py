@@ -100,24 +100,40 @@ MESES_ES = {
     "sep": "09", "oct": "10", "nov": "11", "dic": "12",
 }
 
-def extraer_fecha_documento(texto: str) -> str | None:
+def extraer_fecha_documento(texto: str) -> str:
     """
-    Extrae la fecha de fin del período desde 'Mes reportado: Nov 28 - Dic 25 2025'.
-    Retorna formato 'YYYY-MM' (ej. '2025-12') para ordenamiento correcto.
-    Retorna None si no encuentra el patrón.
+    Extrae la fecha de fin del período desde la línea 'Mes reportado:'.
+    Funciona con ambos formatos:
+      - 'Feb 23 - Mar 25 2026'  (Mes Día - Mes Día Año)
+      - '5 Ene - 3 Feb 2026'    (Día Mes - Día Mes Año)
+    Retorna formato 'YYYY-MM' (ej. '2026-03') para ordenamiento correcto.
+    Retorna '' si no encuentra el patrón.
     """
-    match = re.search(
-        r"Mes reportado:.*?-\s*(\w{3})\s+\d+\s+(\d{4})",
-        texto,
+    linea_match = re.search(r"Mes reportado:([^\n]+)", texto, re.IGNORECASE)
+    if not linea_match:
+        return ""
+
+    linea = linea_match.group(1)
+
+    # Extraer el año
+    year_match = re.search(r"(\d{4})", linea)
+    if not year_match:
+        return ""
+    año = year_match.group(1)
+
+    # Encontrar TODOS los nombres de mes en la línea y tomar el ÚLTIMO
+    # (el último = fin del período, que es el más reciente)
+    meses_encontrados = re.findall(
+        r"\b(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b",
+        linea,
         re.IGNORECASE,
     )
-    if match:
-        mes_str = match.group(1).lower()[:3]
-        año    = match.group(2)
-        mes_num = MESES_ES.get(mes_str)
-        if mes_num:
-            return f"{año}-{mes_num}"
-    return None
+    if not meses_encontrados:
+        return ""
+
+    ultimo_mes = meses_encontrados[-1].lower()[:3]
+    mes_num = MESES_ES.get(ultimo_mes)
+    return f"{año}-{mes_num}" if mes_num else ""
 
 
 def guardar_documento_supabase(
@@ -137,7 +153,7 @@ def guardar_documento_supabase(
             "archivo_nombre": archivo_nombre,
             "contenido_texto": contenido_texto,
             "drive_file_id": drive_file_id,
-            "fecha_documento": extraer_fecha_documento(contenido_texto),
+            "fecha_documento": extraer_fecha_documento(contenido_texto) or "",
         }, on_conflict="drive_file_id").execute()
         logger.info(f"✅ Supabase: guardado '{archivo_nombre}'")
     except Exception as e:
