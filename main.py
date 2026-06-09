@@ -148,26 +148,29 @@ def obtener_contexto_cliente(folder_id: str) -> str:
 
 def obtener_contexto_reciente(folder_id: str) -> str:
     """
-    Para el resumen mensual: trae solo el documento más reciente
-    de cada carpeta (máximo 3 docs en total).
-    Nunca crece aunque acumulen meses.
+    Para el resumen mensual: trae solo el último documento por carpeta
+    (máximo 3 docs en total). Escalable sin importar cuántos meses acumulen.
     """
     try:
-        carpetas = [CARPETA_FACTURA, CARPETA_GRIIN, CARPETA_GENERACION]
+        resp = supabase.table("documentos_energia")\
+            .select("carpeta, archivo_nombre, contenido_texto")\
+            .eq("folder_id", folder_id)\
+            .order("carpeta")\
+            .execute()
+
+        docs = resp.data
+        if not docs:
+            return ""
+
+        # Agrupar por carpeta — sobreescribir en cada iteración
+        # → al final queda el último doc de cada carpeta según Supabase
+        por_carpeta = {}
+        for doc in docs:
+            por_carpeta[doc["carpeta"]] = doc
+
         secciones = []
-
-        for carpeta in carpetas:
-            resp = supabase.table("documentos_energia")\
-                .select("carpeta, archivo_nombre, contenido_texto")\
-                .eq("folder_id", folder_id)\
-                .eq("carpeta", carpeta)\
-                .order("created_at", desc=True)\
-                .limit(1)\
-                .execute()
-
-            docs = resp.data
-            if docs and docs[0].get("contenido_texto"):
-                doc = docs[0]
+        for doc in por_carpeta.values():
+            if doc.get("contenido_texto"):
                 secciones.append(
                     f"--- {doc['carpeta']} | {doc['archivo_nombre']} ---\n"
                     f"{doc['contenido_texto'][:4000]}"
