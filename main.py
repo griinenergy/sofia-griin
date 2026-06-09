@@ -407,23 +407,26 @@ async def procesar_cliente(nombre_cliente: str):
     mensaje_enviado = None
     if cliente.get("telefono"):
         contexto = obtener_contexto_cliente(folder_id)
-        prompt = f"""Eres SofIA de Griin Energy. Genera un mensaje de WhatsApp para {nombre} con el resumen del último período.
+        prompt = f"""Eres SofIA de Griin Energy. Genera un mensaje de WhatsApp para {nombre} con el resumen energético.
 
-En la carpeta "Factura Griin" están todos los datos. Extrae exactamente:
-1. Consumo Air-e (kWh)
-2. Pago Air-e ($)
-3. Consumo Griin — generación solar (kWh)
-4. Pago Griin ($)
-5. Pesos ahorrados este mes ($)
+Si hay varios períodos en los documentos, usa SOLO el más reciente (el de fecha más alta en "Mes reportado:").
 
-Reglas del mensaje:
-- Saludo cálido colombiano mencionando a {nombre}
-- Los 5 datos en líneas separadas con *negritas* para los números
-- Cierra destacando el ahorro
+En el documento "Factura Griin" busca estas frases exactas:
+- "Mes reportado:" → período de facturación
+- "kWh generados/mes" → generación solar
+- "Pesos ahorrados este mes" → ahorro del mes
+- "Total Griin:" → pago Griin
+- La fila Con Griin de la tabla → consumo Air-e (kWh) y pago Air-e ($)
+
+Formato del mensaje WhatsApp:
+- Saludo cálido colombiano a {nombre}
+- *Período:* [fecha]
+- *Consumo Air-e:* X kWh — *Pago Air-e:* $X
+- *Generación solar:* X kWh — *Pago Griin:* $X
+- *Ahorro este mes:* $X 💚
 - Máximo 8 líneas, 1-2 emojis
-- Firma exacta: "SofIA 💚 · Griin Energy"
-- NUNCA uses #, ---, corchetes [] ni "pendiente"
-- Si no encuentras un dato escribe "N/D", nunca lo inventes
+- Firma: "SofIA 💚 · Griin Energy"
+- NUNCA uses #, ---, ni corchetes []
 
 DOCUMENTOS:
 {contexto[:8000]}"""
